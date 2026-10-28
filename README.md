@@ -140,6 +140,7 @@ Code Robot comes equipped with modular workspace skills in .agents/skills/ to au
 
 | Skill | Path | Description |
 | :--- | :--- | :--- |
+| **rowser-interaction-and-reading** | .agents/skills/browser-interaction-and-reading/ | **Skill #1**: Autonomous browsing, scrolling, clicking, reading, & understanding text/code. |
 | **	each-robot-curriculum** | .agents/skills/teach-robot-curriculum/ | Mentors Code Robot through Stage 1 Nursery & the 10-chapter progressive curriculum. |
 | **	rain-code-robot** | .agents/skills/train-code-robot/ | Complete training workflows for VQ-VAE, NCM Generator, and autonomous self-play. |
 | **	pu-v5e-scaling** | .agents/skills/tpu-v5e-scaling/ | Scales architecture to 2.04B params & 1M context on Google Cloud TPU v5e-1 (float16). |
