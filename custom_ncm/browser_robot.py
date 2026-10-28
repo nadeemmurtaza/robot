@@ -146,6 +146,110 @@ class BrowserRobot:
 
         return False
 
+    def click_next_page(self, timeout: int = 10000) -> bool:
+        """
+        Locates and clicks the 'Next' page / chapter button at the bottom of the page,
+        waiting for the new page to load. Returns True if navigation to a new URL succeeded.
+        """
+        if not self.page:
+            raise RuntimeError("Browser is not open.")
+
+        # Scroll to the bottom first where pagination & next buttons live
+        self.scroll("bottom")
+        time.sleep(0.4)
+
+        prev_url = self.page.url
+
+        selectors = [
+            # 1. Docusaurus / modern doc sites (e.g. Next > [Changing Title])
+            'a.pagination-nav__link--next',
+            '.pagination-nav__link--next',
+            '.pagination-nav__item--next a',
+            'a[class*="pagination"][class*="next"]',
+            'a:has(.pagination-nav__sublabel:has-text("Next"))',
+            
+            # 2. VitePress / VuePress / MkDocs / Sphinx
+            '.md-footer__link--next',
+            'a[rel="next"]',
+            'a.pager-link.next',
+            '.prev-next .pager a.next',
+            '.pagination-next a',
+            '.next-page a',
+            '.nav-next a',
+            'a[title*="next chapter" i]',
+            'a[title*="next page" i]',
+            'a[title*="next" i]',
+            
+            # 3. Text patterns with chevrons or labels
+            'a:text-is("Next »")',
+            'a:text-is("Next >")',
+            'a:text-is("Next ›")',
+            'a:text-is("Next →")',
+            'a:text-is("Next")',
+            'a:has-text("Next >")',
+            'a:has-text("Next ›")',
+            'a:has-text("Next »")',
+            'a:has-text("Next →")',
+            'a:has-text("Next chapter")',
+            'a:has-text("Next page")',
+            'a:has-text("Next")',
+            'button:has-text("Next")'
+        ]
+
+        for sel in selectors:
+            try:
+                loc = self.page.locator(sel)
+                count = loc.count()
+                if count > 0:
+                    # Prefer the bottom-most / last next button on the page
+                    target = loc.last
+                    target.scroll_into_view_if_needed()
+                    target.click(timeout=3000)
+                    self.page.wait_for_load_state("domcontentloaded", timeout=timeout)
+                    time.sleep(0.5)
+                    if self.page.url != prev_url:
+                        return True
+            except Exception:
+                continue
+
+        # JavaScript deep fallback: Scans all links in the footer/pagination for "Next"
+        try:
+            clicked_js = self.page.evaluate("""() => {
+                // 1. Direct class match for modern doc frameworks
+                const el = document.querySelector(
+                    'a.pagination-nav__link--next, .pagination-nav__link--next, .pagination-nav__item--next a, .md-footer__link--next, a[rel="next"], .pager a.next, a.next'
+                );
+                if (el) {
+                    el.scrollIntoView();
+                    el.click();
+                    return true;
+                }
+                
+                // 2. Scan anchors from bottom up (catches changing title under Next)
+                const anchors = Array.from(document.querySelectorAll('a[href]'));
+                for (let i = anchors.length - 1; i >= 0; i--) {
+                    const a = anchors[i];
+                    const fullText = (a.innerText || a.textContent || '').trim();
+                    const lines = fullText.split('\\n').map(l => l.trim().toLowerCase());
+                    // Matches "Next", "Next >", "Next »", "Next →" as any line in the button
+                    if (lines.some(l => /^next(\\s*[>»›→]|$)/.test(l))) {
+                        a.scrollIntoView();
+                        a.click();
+                        return true;
+                    }
+                }
+                return false;
+            }""")
+            if clicked_js:
+                self.page.wait_for_load_state("domcontentloaded", timeout=timeout)
+                time.sleep(0.5)
+                if self.page.url != prev_url:
+                    return True
+        except Exception:
+            pass
+
+        return False
+
     def read_text(self, selector: Optional[str] = None) -> str:
         """
         Reads the FULL visible text from the page, prioritizing the main article/document body,

@@ -6,6 +6,7 @@ Usage:
     python browse.py "https://your-link-here.com" --click "Next"
 """
 import sys
+import time
 import argparse
 from custom_ncm.browser_robot import BrowserRobot
 
@@ -52,6 +53,23 @@ def main():
         default="latest_webpage.txt",
         help="File path to save the full extracted text and code (default: latest_webpage.txt)."
     )
+    parser.add_argument(
+        "--next",
+        action="store_true",
+        help="Continually read, scroll, and click 'Next' at the bottom of each page until you stop it (Ctrl+C)."
+    )
+    parser.add_argument(
+        "--delay",
+        type=float,
+        default=1.0,
+        help="Seconds to pause on each page before clicking Next (default: 1.0s)."
+    )
+    parser.add_argument(
+        "--max-pages",
+        type=int,
+        default=0,
+        help="Maximum pages to read in continuous loop (0 = infinite until stopped with Ctrl+C)."
+    )
     args = parser.parse_args()
 
     print("=" * 70)
@@ -60,90 +78,126 @@ def main():
     print(f"[*] Target URL : {args.url}")
     print(f"[*] Window Mode: {'Visible Chrome (Headed)' if args.head else 'Headless Chrome'}")
 
+    current_url = args.url
+    page_count = 0
+    total_characters = 0
+    total_words = 0
+    total_code_blocks = 0
+
     with BrowserRobot(headless=not args.head) as bot:
-        # 1. Navigation
-        print("\n[1/5] Navigating to page...")
-        title = bot.goto(args.url)
-        safe_title = title.encode('ascii', errors='replace').decode('ascii')
-        print(f"  [+] Page Title: {safe_title}")
+        try:
+            while True:
+                page_count += 1
+                print("\n" + "=" * 70)
+                print(f"  [PAGE #{page_count}] READING: {current_url}")
+                print("=" * 70)
 
-        # 2. Scrolling
-        print(f"\n[2/5] Scrolling down {args.scroll}px...")
-        scroll_info = bot.scroll("down", args.scroll)
-        print(f"  [+] Current Position: {scroll_info['scrollY']}px / Total Height: {scroll_info['scrollHeight']}px")
+                # 1. Navigation
+                title = bot.goto(current_url)
+                safe_title = title.encode('ascii', errors='replace').decode('ascii')
+                print(f"  [+] Page Title: {safe_title}")
 
-        # 3. Optional Clicking
-        if args.click:
-            print(f"\n[+] Clicking element: '{args.click}'...")
-            clicked = bot.click(args.click)
-            print(f"  [+] Click result: {'SUCCESS' if clicked else 'Element not found'}")
-            new_title = bot.page.title().encode('ascii', errors='replace').decode('ascii')
-            print(f"  [+] New Page Title: {new_title}")
+                # 2. Scrolling
+                print(f"  [*] Scrolling through page content ({args.scroll}px)...")
+                scroll_info = bot.scroll("down", args.scroll)
+                print(f"  [+] Scroll: {scroll_info['scrollY']}px / Total Height: {scroll_info['scrollHeight']}px")
 
-        # 4. Reading the ENTIRE Page Text
-        print("\n[3/5] Reading the ENTIRE text on page...")
-        text = bot.read_text()
-        paragraphs = bot.read_paragraphs()
-        words = len(text.split())
-        print(f"  [+] Extracted FULL page text:")
-        print(f"      - Characters : {len(text):,} characters")
-        print(f"      - Word Count : {words:,} words")
-        print(f"      - Paragraphs : {len(paragraphs)} full paragraphs extracted")
+                # 3. Optional user click on first page
+                if args.click and page_count == 1:
+                    print(f"  [+] Executing initial click: '{args.click}'...")
+                    bot.click(args.click)
+                    time.sleep(0.5)
 
-        if paragraphs:
-            print(f"\n  [+] Sample First Paragraph Read:")
-            p0 = paragraphs[0].encode('ascii', errors='replace').decode('ascii')
-            print(f"      \"{p0[:300]}...\"")
+                # 4. Reading the ENTIRE Page Text
+                print(f"  [*] Extracting FULL text from page...")
+                text = bot.read_text()
+                paragraphs = bot.read_paragraphs()
+                words = len(text.split())
+                code_blocks = bot.read_code_blocks()
 
-        # 5. Understanding: Code Blocks & Outline
-        print("\n[4/5] Understanding code blocks & section outline...")
-        code_blocks = bot.read_code_blocks()
-        print(f"  [+] Found {len(code_blocks)} code blocks across the entire page!")
-        if code_blocks:
-            first = code_blocks[0]
-            ctx = first['context'].encode('ascii', errors='replace').decode('ascii')
-            snippet = first['code'][:250].encode('ascii', errors='replace').decode('ascii')
-            print(f"  [+] Sample Code Block 1 (Context: {ctx or 'General'}):")
-            print(f"```python\n{snippet}\n```")
+                total_characters += len(text)
+                total_words += words
+                total_code_blocks += len(code_blocks)
 
-        understanding = bot.understand_page()
-        if understanding['headings']:
-            print(f"\n[5/5] Extracted Page Outline ({len(understanding['headings'])} sections):")
-            for h in understanding['headings'][:8]:
-                indent = "  " * h['level']
-                h_text = h['text'].encode('ascii', errors='replace').decode('ascii')
-                print(f"  {indent}* {h_text}")
+                print(f"  [+] Extracted: {len(text):,} chars | {words:,} words | {len(paragraphs)} paragraphs | {len(code_blocks)} code blocks")
 
-        # Save the full extracted content to file
-        if args.save:
-            with open(args.save, 'w', encoding='utf-8') as f:
-                f.write(f"URL: {args.url}\n")
-                f.write(f"Title: {title}\n")
-                f.write(f"Extracted: {len(text):,} characters, {words:,} words, {len(paragraphs)} paragraphs, {len(code_blocks)} code blocks\n")
-                f.write("=" * 70 + "\n\n")
-                f.write("--- FULL EXTRACTED TEXT ---\n\n")
-                f.write(text)
-                f.write("\n\n" + "=" * 70 + "\n\n")
-                f.write(f"--- ALL {len(code_blocks)} CODE BLOCKS ---\n\n")
-                for cb in code_blocks:
-                    f.write(f"### Block {cb['id']}: {cb['context']}\n")
-                    f.write(cb['code'] + "\n\n")
-            print(f"\n[+] Full text and all {len(code_blocks)} code blocks SAVED to: {args.save}")
+                if paragraphs:
+                    p0 = paragraphs[0].encode('ascii', errors='replace').decode('ascii')
+                    print(f"  [+] First Paragraph: \"{p0[:200]}...\"")
 
-        # Print full text if requested
-        if args.full:
-            print("\n" + "=" * 70)
-            print("  FULL EXTRACTED PAGE TEXT:")
-            print("=" * 70)
-            print(text.encode('ascii', errors='replace').decode('ascii'))
+                # 5. Understanding: Code Blocks & Outline
+                if code_blocks:
+                    first = code_blocks[0]
+                    ctx = first['context'].encode('ascii', errors='replace').decode('ascii')
+                    snippet = first['code'][:180].encode('ascii', errors='replace').decode('ascii')
+                    print(f"  [+] Sample Code Block (Context: {ctx or 'General'}):")
+                    print(f"```python\n{snippet}\n```")
 
-        # Optional Screenshot
-        if args.screenshot:
-            bot.screenshot(args.screenshot)
-            print(f"\n[+] Screenshot saved to: {args.screenshot}")
+                understanding = bot.understand_page()
+                if understanding['headings']:
+                    print(f"  [+] Page Sections:")
+                    for h in understanding['headings'][:5]:
+                        indent = "  " * h['level']
+                        h_text = h['text'].encode('ascii', errors='replace').decode('ascii')
+                        print(f"    {indent}* {h_text}")
+
+                # Save / Append page to output file
+                if args.save:
+                    mode = 'w' if page_count == 1 else 'a'
+                    with open(args.save, mode, encoding='utf-8') as f:
+                        f.write(f"\n{'='*70}\n")
+                        f.write(f"PAGE #{page_count}: {title}\nURL: {current_url}\n")
+                        f.write(f"Stats: {len(text):,} chars, {words:,} words, {len(code_blocks)} code blocks\n")
+                        f.write(f"{'-'*70}\n\n")
+                        f.write(text)
+                        f.write("\n\n--- CODE BLOCKS ---\n\n")
+                        for cb in code_blocks:
+                            f.write(f"### {cb['context']}\n{cb['code']}\n\n")
+                    print(f"  [+] Content appended to: {args.save}")
+
+                if args.full:
+                    print("\n" + text.encode('ascii', errors='replace').decode('ascii'))
+
+                if args.screenshot:
+                    ss_path = f"page_{page_count}_{args.screenshot}" if page_count > 1 else args.screenshot
+                    bot.screenshot(ss_path)
+                    print(f"  [+] Screenshot saved to: {ss_path}")
+
+                # Single page check
+                if not args.next:
+                    print("\n[i] Note: Run with --next to continuously auto-click 'Next' and read subsequent pages until stopped.")
+                    break
+
+                # Max pages limit check
+                if args.max_pages > 0 and page_count >= args.max_pages:
+                    print(f"\n[+] Reached requested max page limit ({args.max_pages}). Done!")
+                    break
+
+                # Continuous mode: Click Next button at bottom of page!
+                print(f"\n[*] Reached end of Page #{page_count}. Looking for 'Next' button...")
+                time.sleep(args.delay)
+
+                has_next = bot.click_next_page()
+                if not has_next:
+                    print(f"\n[!] No 'Next' button found on page (end of documentation reached).")
+                    break
+
+                current_url = bot.page.url
+                print(f"  [>>>] 'Next' clicked successfully! Transitioning to: {current_url}")
+
+        except KeyboardInterrupt:
+            print("\n\n" + "!" * 70)
+            print("  [STOPPED] Continuous reading loop paused by user (Ctrl+C)!")
+            print("!" * 70)
 
     print("\n" + "=" * 70)
-    print("  BROWSE & READ COMPLETED SUCCESSFULLY!")
+    print("  AUTONOMOUS CRAWL & READ SUMMARY:")
+    print(f"  - Total Pages Read   : {page_count}")
+    print(f"  - Total Words Read   : {total_words:,}")
+    print(f"  - Total Characters   : {total_characters:,}")
+    print(f"  - Total Code Blocks  : {total_code_blocks:,}")
+    if args.save:
+        print(f"  - Complete Corpus In : {args.save}")
     print("=" * 70)
 
 if __name__ == "__main__":
