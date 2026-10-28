@@ -24,3 +24,7 @@ ENV/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Scraped web dumps & screenshots
+latest_webpage.txt
+*.png

@@ -41,6 +41,17 @@ def main():
         default=None,
         help="Optional filename to save a screenshot (e.g. page.png)."
     )
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="Print the entire extracted text in the terminal."
+    )
+    parser.add_argument(
+        "--save",
+        type=str,
+        default="latest_webpage.txt",
+        help="File path to save the full extracted text and code (default: latest_webpage.txt)."
+    )
     args = parser.parse_args()
 
     print("=" * 70)
@@ -69,17 +80,25 @@ def main():
             new_title = bot.page.title().encode('ascii', errors='replace').decode('ascii')
             print(f"  [+] New Page Title: {new_title}")
 
-        # 4. Reading Clean Text
-        print("\n[3/5] Reading & extracting page text...")
-        text = bot.read_text("body")
-        print(f"  [+] Extracted {len(text):,} characters of clean rendered text.")
-        safe_preview = text[:400].encode('ascii', errors='replace').decode('ascii')
-        print(f"  [+] Content Preview:\n{'-'*50}\n{safe_preview}...\n{'-'*50}")
+        # 4. Reading the ENTIRE Page Text
+        print("\n[3/5] Reading the ENTIRE text on page...")
+        text = bot.read_text()
+        paragraphs = bot.read_paragraphs()
+        words = len(text.split())
+        print(f"  [+] Extracted FULL page text:")
+        print(f"      - Characters : {len(text):,} characters")
+        print(f"      - Word Count : {words:,} words")
+        print(f"      - Paragraphs : {len(paragraphs)} full paragraphs extracted")
+
+        if paragraphs:
+            print(f"\n  [+] Sample First Paragraph Read:")
+            p0 = paragraphs[0].encode('ascii', errors='replace').decode('ascii')
+            print(f"      \"{p0[:300]}...\"")
 
         # 5. Understanding: Code Blocks & Outline
-        print("\n[4/5] Understanding page structure & code...")
+        print("\n[4/5] Understanding code blocks & section outline...")
         code_blocks = bot.read_code_blocks()
-        print(f"  [+] Found {len(code_blocks)} code blocks on the page!")
+        print(f"  [+] Found {len(code_blocks)} code blocks across the entire page!")
         if code_blocks:
             first = code_blocks[0]
             ctx = first['context'].encode('ascii', errors='replace').decode('ascii')
@@ -90,10 +109,33 @@ def main():
         understanding = bot.understand_page()
         if understanding['headings']:
             print(f"\n[5/5] Extracted Page Outline ({len(understanding['headings'])} sections):")
-            for h in understanding['headings'][:6]:
+            for h in understanding['headings'][:8]:
                 indent = "  " * h['level']
                 h_text = h['text'].encode('ascii', errors='replace').decode('ascii')
                 print(f"  {indent}* {h_text}")
+
+        # Save the full extracted content to file
+        if args.save:
+            with open(args.save, 'w', encoding='utf-8') as f:
+                f.write(f"URL: {args.url}\n")
+                f.write(f"Title: {title}\n")
+                f.write(f"Extracted: {len(text):,} characters, {words:,} words, {len(paragraphs)} paragraphs, {len(code_blocks)} code blocks\n")
+                f.write("=" * 70 + "\n\n")
+                f.write("--- FULL EXTRACTED TEXT ---\n\n")
+                f.write(text)
+                f.write("\n\n" + "=" * 70 + "\n\n")
+                f.write(f"--- ALL {len(code_blocks)} CODE BLOCKS ---\n\n")
+                for cb in code_blocks:
+                    f.write(f"### Block {cb['id']}: {cb['context']}\n")
+                    f.write(cb['code'] + "\n\n")
+            print(f"\n[+] Full text and all {len(code_blocks)} code blocks SAVED to: {args.save}")
+
+        # Print full text if requested
+        if args.full:
+            print("\n" + "=" * 70)
+            print("  FULL EXTRACTED PAGE TEXT:")
+            print("=" * 70)
+            print(text.encode('ascii', errors='replace').decode('ascii'))
 
         # Optional Screenshot
         if args.screenshot:

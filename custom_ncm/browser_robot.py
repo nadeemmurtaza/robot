@@ -146,27 +146,60 @@ class BrowserRobot:
 
         return False
 
-    def read_text(self, selector: str = "body") -> str:
+    def read_text(self, selector: Optional[str] = None) -> str:
         """
-        Reads visible text from the page, cleaning out script tags, styles, and whitespace clutter.
+        Reads the FULL visible text from the page, prioritizing the main article/document body,
+        cleaning out script tags, sidebars, navigation bars, and whitespace clutter.
         """
         if not self.page:
             raise RuntimeError("Browser is not open.")
 
-        raw_text = self.page.evaluate(f"""(sel) => {{
-            const el = document.querySelector(sel);
+        raw_text = self.page.evaluate("""(userSel) => {
+            // Target the main content container if available
+            let el = null;
+            if (userSel) {
+                el = document.querySelector(userSel);
+            } else {
+                el = document.querySelector('main, article, [role="main"], div.body, div.document, body');
+            }
+            if (!el) el = document.body;
             if (!el) return '';
+            
             // Clone to avoid modifying live DOM
             const clone = el.cloneNode(true);
-            // Remove scripts, styles, noscript, svg
-            const toRemove = clone.querySelectorAll('script, style, noscript, svg, nav, footer');
+            
+            // Remove boilerplate navigation, sidebars, ads, scripts
+            const toRemove = clone.querySelectorAll(
+                'script, style, noscript, svg, nav, footer, header, .sphinxsidebar, .related, .sidebar, aside'
+            );
             toRemove.forEach(n => n.remove());
+            
             return clone.innerText || clone.textContent || '';
-        }}""", selector)
+        }""", selector)
 
         # Normalize multiple blank lines and whitespace
         cleaned = re.sub(r'\n\s*\n', '\n\n', raw_text.strip())
         return cleaned
+
+    def read_paragraphs(self) -> List[str]:
+        """
+        Extracts all full paragraphs (<p>) from the main article body.
+        """
+        if not self.page:
+            raise RuntimeError("Browser is not open.")
+
+        paragraphs = self.page.evaluate("""() => {
+            const results = [];
+            const container = document.querySelector('main, article, [role="main"], div.body, div.document, body') || document.body;
+            container.querySelectorAll('p').forEach(p => {
+                const text = p.innerText.trim();
+                if (text.length > 20) {
+                    results.push(text);
+                }
+            });
+            return results;
+        }""")
+        return paragraphs
 
     def read_code_blocks(self) -> List[Dict[str, str]]:
         """
