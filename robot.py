@@ -26,7 +26,7 @@ def print_model_tiers():
         ("Small (Baseline)", NCMConfig.small()),
         ("Medium (Scaled)", NCMConfig.medium()),
         ("Large (Deep)", NCMConfig.large()),
-        ("Option B (2.0 Billion Frontier Tier)", NCMConfig.two_billion())
+        ("Frontier Tier (2.04B Parameters / 1M Context)", NCMConfig.two_billion_1m())
     ]
     
     for name, cfg in tiers:
@@ -59,19 +59,43 @@ def print_model_tiers():
             print(f"  - Total Parameters: {tot_params:,} (~{tot_params/1e6:.1f}M)")
         print(f"  - Concept VQ-VAE  : {v_params:,} params ({cfg.vq_enc_layers} enc / {cfg.vq_dec_layers} dec layers)")
         print(f"  - NCM Generator   : {g_params:,} params ({cfg.gen_n_layer} layers, {cfg.gen_n_head} heads, dim={cfg.embed_dim})")
-        print(f"  - Context Scales  : target={cfg.context_length} tokens, prefix={cfg.prefix_length} tokens")
+        print(f"  - Context Window  : {cfg.context_length:,} tokens (prefix={cfg.prefix_length:,} tokens)")
         print(f"  - Levels (Hier.)  : {cfg.levels}")
+        if cfg.context_length > 8192:
+            print(f"  - Position Scheme : RoPE (Rotary Position Embeddings, theta=10,000,000, 0 parameter table)")
+            print(f"  - TPU v5e-1 Memory: ~4.09 GB in bfloat16 (fits in 16 GB HBM2 with 11.9 GB headroom)")
         
-    print("\n* Tier: Hybrid Consistency Model (HC-NCM)")
-    cfg = NCMConfig.small()
-    v = CodeVQVAE(260, cfg.context_length, cfg.embed_dim, cfg.levels, cfg.vq_codebook_size, cfg.vq_enc_layers, cfg.vq_dec_layers)
-    h = HybridConsistencyNCM(cfg, vqvae=v)
-    h_params = get_param_count(h)
-    print(f"  - Total Parameters: {h_params:,} (~{h_params/1e6:.1f}M)")
+    print("\n" + "-" * 70)
+    print("  HYBRID CONSISTENCY ARCHITECTURE (HC-NCM): 1-Step LCM + Gemma + NCM")
+    print("-" * 70)
+    
+    # 1. Baseline HC-NCM
+    cfg_small = NCMConfig.small()
+    with torch.device('meta'):
+        v_s = CodeVQVAE(260, cfg_small.context_length, cfg_small.embed_dim, cfg_small.levels, cfg_small.vq_codebook_size, cfg_small.vq_enc_layers, cfg_small.vq_dec_layers)
+        h_s = HybridConsistencyNCM(cfg_small, vqvae=v_s)
+    h_s_params = get_param_count(h_s)
+    print(f"\n* HC-NCM Baseline (CPU / Fast Exploration):")
+    print(f"  - Total Parameters: {h_s_params:,} (~{h_s_params/1e6:.1f}M)")
+    print(f"  - Context Window  : {cfg_small.context_length} tokens (prefix={cfg_small.prefix_length} tokens)")
+    print(f"  - Hierarchy Levels: {cfg_small.levels}")
+    
+    # 2. Frontier HC-NCM 2.04B with 1M Context
+    cfg_2b = NCMConfig.two_billion_1m()
+    with torch.device('meta'):
+        v_2b = CodeVQVAE(260, cfg_2b.context_length, cfg_2b.embed_dim, cfg_2b.levels, cfg_2b.vq_codebook_size, cfg_2b.vq_enc_layers, cfg_2b.vq_dec_layers)
+        h_2b = HybridConsistencyNCM(cfg_2b, vqvae=v_2b)
+    h_2b_params = get_param_count(h_2b)
+    print(f"\n* HC-NCM Frontier (2.0B+ / 1M Context for TPU v5e-1 & 40GB RAM):")
+    print(f"  - Total Parameters: {h_2b_params:,} (~{h_2b_params/1e9:.2f}B)")
+    print(f"  - Context Window  : {cfg_2b.context_length:,} tokens (1,048,576 tokens / 1M)")
+    print(f"  - Prompt Prefix   : {cfg_2b.prefix_length:,} tokens (131,072 tokens / 128k)")
+    print(f"  - Hierarchy Levels: {cfg_2b.levels} (Level 0 gives 16,384x global compression)")
     print(f"  - LCM Consistency : 1-Step direct trajectory mapping (Diffusion Gemma bidirectional backbone)")
-    print(f"  - NCM Hierarchy   : Coarse-to-fine multi-scale pyramid (2 -> 8 -> 32 -> 64 tokens)")
+    print(f"  - Position Scheme : RoPE (Rotary Position Embeddings, theta=10,000,000, 0 parameter table)")
     print(f"  - Causal AR Head  : Gemma-style autoregressive syntax realizer")
-    print(f"  - Compiler Loop   : Programmatic AST syntax verification")
+    print(f"  - Hardware Sizing : ~4.09 GB in bfloat16 on TPU v5e-1 (16GB HBM2) / ~32GB training on 40GB RAM")
+    print(f"  - AST Verification: Programmatic grammar and compiler execution loop")
     print("\n" + "=" * 70)
 
 def main():

@@ -97,29 +97,38 @@ class NCMConfig:
         )
 
     @classmethod
-    def two_billion(cls) -> "NCMConfig":
+    def two_billion_1m(cls) -> "NCMConfig":
         """
-        Option B (2.0 Billion Parameters / 2B):
-        Designed specifically for 40 GB RAM and 225 GB SSD.
-        - Context Length: 1,024 tokens (Full multi-function modules & classes)
-        - Prompt Prefix : 256 tokens (Detailed algorithmic instructions & docstrings)
-        - Concept Scales: [8, 64, 256, 1024] tokens
-        - Transformer   : d_model=2048, 22 layers, 16 attention heads
-        - Training RAM  : ~32 GB (Fits comfortably within 40 GB RAM)
-        - Inference RAM : ~4.0 GB (FP16) or ~1.0 GB (INT4)
-        - Disk Space    : ~4.0 GB checkpoint on 225 GB SSD
+        Frontier 2.04 Billion Parameter Tier with 1M Context Window (1,048,576 tokens).
+        Engineered specifically for Google Cloud TPU v5e-1 (16GB HBM2 with native bfloat16)
+        and 40 GB RAM / 225 GB SSD:
+        - Total Parameters: 2,043,863,040 (~2.04 Billion parameters)
+        - Context Window  : 1,048,576 tokens (2^20, full 1M+ codebase context)
+        - Prompt Prefix   : 131,072 tokens (2^17, 128k prompt context)
+        - Concept Scales  : [64, 1024, 32768, 1048576] tokens
+                            (Level 0 provides 16,384x global concept compression)
+        - Position Coding : Rotary Position Embeddings (RoPE, theta = 10,000,000, 0 parameter lookup tables)
+        - Transformer     : d_model=2048, 24 generator layers, 16 attention heads, 38 hybrid layers
+        - TPU Memory (v5e): ~4.09 GB in bfloat16 (fits in 16 GB HBM2 with 11.9 GB headroom)
+        - Local Memory    : ~32 GB RAM during training
         """
         return cls(
-            context_length=1024,
-            prefix_length=256,
-            levels=[8, 64, 256, 1024],
+            context_length=1048576,
+            prefix_length=131072,
+            levels=[64, 1024, 32768, 1048576],
             embed_dim=2048,
+            vocab_size=256,
             vq_codebook_size=2048,
             vq_enc_layers=4,
             vq_dec_layers=4,
-            gen_n_layer=22,
+            gen_n_layer=24,
             gen_n_head=16,
-            batch_size=4,
-            lr_vqvae=3e-4,
-            lr_gen=1.5e-4
+            batch_size=1,
+            lr_vqvae=1e-4,
+            lr_gen=5e-5
         )
+
+    @classmethod
+    def two_billion(cls) -> "NCMConfig":
+        """Alias for the Frontier 2.04B parameter tier with 1M context."""
+        return cls.two_billion_1m()

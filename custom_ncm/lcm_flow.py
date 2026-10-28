@@ -12,6 +12,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from custom_ncm.rope import RotaryPositionalEmbedding
+
 class SinusoidalTimestepEmbedding(nn.Module):
     """Sinusoidal embeddings for diffusion timesteps t in [0, 1000]."""
     def __init__(self, dim: int):
@@ -113,8 +115,13 @@ class LatentConsistencyPlanner(nn.Module):
         # Prefix encoder projection
         self.prefix_proj = nn.Linear(latent_dim, latent_dim)
         
-        # Position embedding for concept sequence
-        self.concept_pos = nn.Embedding(concept_seq_len, latent_dim)
+        # Position embedding for concept sequence (RoPE for long sequences)
+        if concept_seq_len > 8192:
+            self.concept_rope = RotaryPositionalEmbedding(latent_dim, max_seq_len=concept_seq_len)
+            self.concept_pos = None
+        else:
+            self.concept_pos = nn.Embedding(concept_seq_len, latent_dim)
+            self.concept_rope = None
         
         # Bidirectional Transformer backbone
         self.blocks = nn.ModuleList([
@@ -123,6 +130,12 @@ class LatentConsistencyPlanner(nn.Module):
         ])
         self.ln_out = nn.LayerNorm(latent_dim)
         self.out_proj = nn.Linear(latent_dim, latent_dim)
+
+    def get_concept_pos(self, x: torch.Tensor, S: int) -> torch.Tensor:
+        if self.concept_rope is not None:
+            return self.concept_rope(x, S)
+        pos = torch.arange(S, device=x.device).unsqueeze(0)
+        return self.concept_pos(pos)
 
     def get_scalings(self, sigma: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
@@ -159,8 +172,7 @@ class LatentConsistencyPlanner(nn.Module):
         x_scaled = c_in * z_t
         
         # Add concept position embeddings
-        pos = torch.arange(S, device=z_t.device).unsqueeze(0)
-        h = x_scaled + self.concept_pos(pos)
+        h = x_scaled + self.get_concept_pos(x_scaled, S)
         
         # Concatenate prefix condition to allow bidirectional cross-attention
         p = self.prefix_proj(prefix_embeds)

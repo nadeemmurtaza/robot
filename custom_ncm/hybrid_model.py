@@ -19,6 +19,7 @@ from custom_ncm.vqvae import CodeVQVAE
 from custom_ncm.ncm_model import NextConceptGenerator
 from custom_ncm.lcm_flow import LatentConsistencyPlanner
 from custom_ncm.verifier import CodeVerifier, VerificationResult
+from custom_ncm.rope import RotaryPositionalEmbedding
 
 class CausalTransformerBlock(nn.Module):
     """
@@ -111,11 +112,22 @@ class HybridConsistencyNCM(nn.Module):
         
         # 3. Prompt Prefix Embedding
         self.prefix_token_emb = nn.Embedding(self.vocab_size, self.embed_dim)
-        self.prefix_pos_emb = nn.Embedding(self.prefix_len, self.embed_dim)
+        if self.prefix_len > 8192:
+            self.prefix_rope = RotaryPositionalEmbedding(self.embed_dim, max_seq_len=self.prefix_len)
+            self.prefix_pos_emb = None
+        else:
+            self.prefix_pos_emb = nn.Embedding(self.prefix_len, self.embed_dim)
+            self.prefix_rope = None
         
         # 4. Causal Gemma-Style Token Decoder (Exact Syntax Realizer)
         self.target_token_emb = nn.Embedding(self.vocab_size, self.embed_dim)
-        self.target_pos_emb = nn.Embedding(self.context_len, self.embed_dim)
+        if self.context_len > 8192:
+            self.target_rope = RotaryPositionalEmbedding(self.embed_dim, max_seq_len=self.context_len)
+            self.target_pos_emb = None
+        else:
+            self.target_pos_emb = nn.Embedding(self.context_len, self.embed_dim)
+            self.target_rope = None
+            
         self.causal_blocks = nn.ModuleList([
             CausalTransformerBlock(self.embed_dim, n_head=config.gen_n_head)
             for _ in range(3)
@@ -124,11 +136,22 @@ class HybridConsistencyNCM(nn.Module):
         self.token_head = nn.Linear(self.embed_dim, self.vocab_size, bias=False)
         self.token_head.weight = self.target_token_emb.weight  # Weight tying
 
+    def get_prefix_pos(self, x: torch.Tensor, P: int) -> torch.Tensor:
+        if self.prefix_rope is not None:
+            return self.prefix_rope(x, P)
+        pos = torch.arange(P, device=x.device).unsqueeze(0)
+        return self.prefix_pos_emb(pos)
+
+    def get_target_pos(self, x: torch.Tensor, L: int) -> torch.Tensor:
+        if self.target_rope is not None:
+            return self.target_rope(x, L)
+        pos = torch.arange(L, device=x.device).unsqueeze(0)
+        return self.target_pos_emb(pos)
+
     def encode_prefix(self, prefix_ids: torch.Tensor) -> torch.Tensor:
         """Embeds prompt prefix tokens with positional information."""
         B, P = prefix_ids.shape
-        pos = torch.arange(P, device=prefix_ids.device).unsqueeze(0)
-        return self.prefix_token_emb(prefix_ids) + self.prefix_pos_emb(pos)
+        return self.prefix_token_emb(prefix_ids) + self.get_prefix_pos(prefix_ids, P)
 
     def forward(
         self,
@@ -148,9 +171,8 @@ class HybridConsistencyNCM(nn.Module):
         
         # 1. Target concepts from VQ-VAE
         with torch.no_grad():
-            _, _, target_codes, z_intermediates = self.vqvae.vq(self.vqvae.enc_ln(
-                self.vqvae.token_emb(target) + self.vqvae.pos_emb(torch.arange(L, device=device).unsqueeze(0))
-            ))
+            h_tgt = self.vqvae.token_emb(target) + self.vqvae.get_pos_emb(target, L)
+            _, _, target_codes, z_intermediates = self.vqvae.vq(self.vqvae.enc_ln(h_tgt))
             
         # 2. Base NCM Generator Loss
         _, _, ncm_loss = self.ncm_generator(prefix, target)
@@ -175,8 +197,7 @@ class HybridConsistencyNCM(nn.Module):
         concept_context = torch.cat([prefix_embeds, z_0_pred], dim=1)  # [B, P + S_lcm, D]
         
         # Autoregressive target input shifted by 1
-        pos = torch.arange(L, device=device).unsqueeze(0)
-        target_in = self.target_token_emb(target) + self.target_pos_emb(pos)
+        target_in = self.target_token_emb(target) + self.get_target_pos(target, L)
         
         # Causal mask (prevent seeing future tokens)
         causal_mask = torch.triu(torch.full((L, L), float('-inf'), device=device), diagonal=1)
@@ -247,8 +268,7 @@ class HybridConsistencyNCM(nn.Module):
         for step in range(self.context_len):
             curr_tensor = torch.tensor([curr_tokens], dtype=torch.long, device=device)
             seq_len = curr_tensor.shape[1]
-            pos = torch.arange(seq_len, device=device).unsqueeze(0)
-            x_emb = self.target_token_emb(curr_tensor) + self.target_pos_emb(pos)
+            x_emb = self.target_token_emb(curr_tensor) + self.get_target_pos(curr_tensor, seq_len)
             
             causal_mask = torch.triu(torch.full((seq_len, seq_len), float('-inf'), device=device), diagonal=1)
             h = x_emb

@@ -10,6 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from custom_ncm.vqvae import CodeVQVAE
+from custom_ncm.rope import RotaryPositionalEmbedding
 
 class NCMTransformerBlock(nn.Module):
     def __init__(self, d_model: int, n_head: int = 4, dropout: float = 0.1):
@@ -59,7 +60,12 @@ class NextConceptGenerator(nn.Module):
         
         # Prefix embedding (for prompt tokens)
         self.prefix_token_emb = nn.Embedding(vqvae.vocab_size, d_model)
-        self.prefix_pos_emb = nn.Embedding(prefix_len, d_model)
+        if prefix_len > 8192:
+            self.prefix_rope = RotaryPositionalEmbedding(d_model, max_seq_len=prefix_len)
+            self.prefix_pos_emb = None
+        else:
+            self.prefix_pos_emb = nn.Embedding(prefix_len, d_model)
+            self.prefix_rope = None
         
         # Level 0 learned query vectors
         self.l0_queries = nn.Parameter(torch.randn(1, self.levels[0], d_model) * 0.02)
@@ -67,7 +73,13 @@ class NextConceptGenerator(nn.Module):
         # Level embeddings to distinguish hierarchy levels
         self.level_emb = nn.Embedding(self.K, d_model)
         # Positional embedding for positions within any level
-        self.level_pos_emb = nn.Embedding(max(self.levels), d_model)
+        max_l = max(self.levels)
+        if max_l > 8192:
+            self.level_rope = RotaryPositionalEmbedding(d_model, max_seq_len=max_l)
+            self.level_pos_emb = None
+        else:
+            self.level_pos_emb = nn.Embedding(max_l, d_model)
+            self.level_rope = None
         
         # Projection from VQ-VAE embed_dim to generator d_model if different
         if vqvae.embed_dim != d_model:
@@ -87,6 +99,18 @@ class NextConceptGenerator(nn.Module):
             nn.Linear(d_model, codebook_size)
             for _ in self.levels
         ])
+
+    def get_prefix_pos(self, x: torch.Tensor, P: int) -> torch.Tensor:
+        if self.prefix_rope is not None:
+            return self.prefix_rope(x, P)
+        pos = torch.arange(P, device=x.device).unsqueeze(0)
+        return self.prefix_pos_emb(pos)
+
+    def get_level_pos(self, x: torch.Tensor, L: int) -> torch.Tensor:
+        if self.level_rope is not None:
+            return self.level_rope(x, L)
+        pos = torch.arange(L, device=x.device).unsqueeze(0)
+        return self.level_pos_emb(pos)
 
     def build_block_causal_mask(self, P: int, levels: List[int], device: torch.device) -> torch.Tensor:
         """
@@ -134,8 +158,7 @@ class NextConceptGenerator(nn.Module):
         # 1. Extract ground-truth concept codes and intermediate representations from VQ-VAE
         with torch.no_grad():
             B_tgt, L_tgt = target_ids.shape
-            pos = torch.arange(L_tgt, device=device).unsqueeze(0)
-            h_tgt = self.vqvae.token_emb(target_ids) + self.vqvae.pos_emb(pos)
+            h_tgt = self.vqvae.token_emb(target_ids) + self.vqvae.get_pos_emb(target_ids, L_tgt)
             for block in self.vqvae.enc_blocks:
                 h_tgt = block(h_tgt)
             z_e = self.vqvae.enc_ln(h_tgt)
@@ -143,13 +166,12 @@ class NextConceptGenerator(nn.Module):
             _, _, target_codes, z_intermediates = self.vqvae.vq(z_e)
             
         # 2. Encode prefix prompt
-        pos_p = torch.arange(self.prefix_len, device=device).unsqueeze(0)
-        h_prefix = self.prefix_token_emb(prefix_ids) + self.prefix_pos_emb(pos_p)
+        P = prefix_ids.shape[1]
+        h_prefix = self.prefix_token_emb(prefix_ids) + self.get_prefix_pos(prefix_ids, P)
         
         # 3. Assemble inputs for each level
         # Level 0 input: learned queries + level 0 embedding + positional embedding
-        pos_l0 = torch.arange(self.levels[0], device=device).unsqueeze(0)
-        l0_in = self.l0_queries.expand(B, -1, -1) + self.level_emb(torch.tensor(0, device=device)) + self.level_pos_emb(pos_l0)
+        l0_in = self.l0_queries.expand(B, -1, -1) + self.level_emb(torch.tensor(0, device=device)) + self.get_level_pos(self.l0_queries, self.levels[0])
         
         level_inputs = [l0_in]
         for l in range(1, self.K):
@@ -157,8 +179,7 @@ class NextConceptGenerator(nn.Module):
             # downsampled/interpolated to length levels[l]
             z_prev = z_intermediates[l - 1]
             z_down = self.vqvae.vq.downsample(z_prev, self.levels[l])
-            pos_l = torch.arange(self.levels[l], device=device).unsqueeze(0)
-            z_proj = self.input_proj(z_down) + self.level_emb(torch.tensor(l, device=device)) + self.level_pos_emb(pos_l)
+            z_proj = self.input_proj(z_down) + self.level_emb(torch.tensor(l, device=device)) + self.get_level_pos(z_down, self.levels[l])
             level_inputs.append(z_proj)
             
         # Concatenate full sequence: [Prefix, Level 0, Level 1, ..., Level K-1]
@@ -211,8 +232,8 @@ class NextConceptGenerator(nn.Module):
         device = prefix_ids.device
         
         # 1. Encode prefix
-        pos_p = torch.arange(self.prefix_len, device=device).unsqueeze(0)
-        h_prefix = self.prefix_token_emb(prefix_ids) + self.prefix_pos_emb(pos_p)
+        P = prefix_ids.shape[1]
+        h_prefix = self.prefix_token_emb(prefix_ids) + self.get_prefix_pos(prefix_ids, P)
         
         predicted_codes = []
         z_hat = torch.zeros(B, self.vqvae.context_length, self.vqvae.embed_dim, device=device)
@@ -221,21 +242,20 @@ class NextConceptGenerator(nn.Module):
             level_len = self.levels[l]
             
             # Prepare input for level l with level embedding and intra-level position encoding
-            pos_l = torch.arange(level_len, device=device).unsqueeze(0)
             if l == 0:
-                l_in = self.l0_queries.expand(B, -1, -1) + self.level_emb(torch.tensor(0, device=device)) + self.level_pos_emb(pos_l)
+                l_in = self.l0_queries.expand(B, -1, -1) + self.level_emb(torch.tensor(0, device=device)) + self.get_level_pos(self.l0_queries, self.levels[0])
             else:
                 z_down = self.vqvae.vq.downsample(z_hat, level_len)
-                l_in = self.input_proj(z_down) + self.level_emb(torch.tensor(l, device=device)) + self.level_pos_emb(pos_l)
+                l_in = self.input_proj(z_down) + self.level_emb(torch.tensor(l, device=device)) + self.get_level_pos(z_down, level_len)
                 
             # Concatenate prefix + current level input
             # Attention allows bidirectional attention within current level and cross-attention to prefix
             seq = torch.cat([h_prefix, l_in], dim=1)
             
             # Mask: prefix attends to prefix; current level attends to prefix + current level
-            seq_len = self.prefix_len + level_len
+            seq_len = P + level_len
             gen_mask = torch.zeros((seq_len, seq_len), device=device)
-            gen_mask[:self.prefix_len, self.prefix_len:] = float('-inf')
+            gen_mask[:P, P:] = float('-inf')
             
             h = seq
             for block in self.blocks:
@@ -243,7 +263,7 @@ class NextConceptGenerator(nn.Module):
             h = self.ln_f(h)
             
             # Extract current level hidden states and project with level head
-            level_h = h[:, self.prefix_len:, :]
+            level_h = h[:, P:, :]
             logits = self.heads[l](level_h) # [B, level_len, CodebookSize]
             
             # Sample discrete codes for this level in parallel!

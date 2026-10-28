@@ -161,10 +161,13 @@ class MultiscaleResidualVQ(nn.Module):
         return intermediates
 
 
+from custom_ncm.rope import RotaryPositionalEmbedding
+
 class CodeVQVAE(nn.Module):
     """
     Stage-1 Multiscale Concept VQ-VAE.
     Maps code tokens <-> hierarchical discrete concepts.
+    Supports 1M Context Window via RoPE (Rotary Position Embeddings).
     """
     def __init__(
         self,
@@ -183,10 +186,18 @@ class CodeVQVAE(nn.Module):
         self.context_length = context_length
         self.embed_dim = embed_dim
         self.levels = levels
+        self.use_rope = context_length > 8192
         
         # Token and positional embeddings
         self.token_emb = nn.Embedding(vocab_size, embed_dim)
-        self.pos_emb = nn.Embedding(context_length, embed_dim)
+        if self.use_rope:
+            self.rope = RotaryPositionalEmbedding(embed_dim, max_seq_len=context_length)
+            self.pos_emb = None
+            self.dec_pos_emb = None
+        else:
+            self.pos_emb = nn.Embedding(context_length, embed_dim)
+            self.dec_pos_emb = nn.Embedding(context_length, embed_dim)
+            self.rope = None
         
         # Transformer Encoder
         self.enc_blocks = nn.ModuleList([
@@ -199,7 +210,6 @@ class CodeVQVAE(nn.Module):
         self.vq = MultiscaleResidualVQ(levels, embed_dim, codebook_size, commitment_cost)
         
         # Transformer Decoder
-        self.dec_pos_emb = nn.Embedding(context_length, embed_dim)
         self.dec_blocks = nn.ModuleList([
             TransformerBlock(embed_dim, n_head=4, dropout=dropout)
             for _ in range(n_dec_layers)
@@ -211,11 +221,22 @@ class CodeVQVAE(nn.Module):
         # Weight tying
         self.lm_head.weight = self.token_emb.weight
 
+    def get_pos_emb(self, x: torch.Tensor, L: int) -> torch.Tensor:
+        if self.use_rope:
+            return self.rope(x, L)
+        pos = torch.arange(L, device=x.device).unsqueeze(0)
+        return self.pos_emb(pos)
+
+    def get_dec_pos_emb(self, x: torch.Tensor, L: int) -> torch.Tensor:
+        if self.use_rope:
+            return self.rope(x, L)
+        pos = torch.arange(L, device=x.device).unsqueeze(0)
+        return self.dec_pos_emb(pos)
+
     def encode(self, x: torch.Tensor) -> List[torch.Tensor]:
         """Returns the list of discrete concept indices across levels: [c_0, ..., c_{K-1}]"""
         B, L = x.shape
-        pos = torch.arange(L, device=x.device).unsqueeze(0)
-        h = self.token_emb(x) + self.pos_emb(pos)
+        h = self.token_emb(x) + self.get_pos_emb(x, L)
         for block in self.enc_blocks:
             h = block(h)
         h = self.enc_ln(h)
@@ -233,8 +254,7 @@ class CodeVQVAE(nn.Module):
             indices: List of discrete concept code tensors
         """
         B, L = x.shape
-        pos = torch.arange(L, device=x.device).unsqueeze(0)
-        h = self.token_emb(x) + self.pos_emb(pos)
+        h = self.token_emb(x) + self.get_pos_emb(x, L)
         for block in self.enc_blocks:
             h = block(h)
         z_e = self.enc_ln(h)
@@ -243,8 +263,7 @@ class CodeVQVAE(nn.Module):
         
         # Straight-Through Estimator for decoder with positional embedding
         z_ste = z_e + (z_q - z_e).detach()
-        
-        h_dec = z_ste + self.dec_pos_emb(pos)
+        h_dec = z_ste + self.get_dec_pos_emb(z_ste, L)
         for block in self.dec_blocks:
             h_dec = block(h_dec)
         logits = self.lm_head(self.dec_ln(h_dec))
@@ -254,8 +273,8 @@ class CodeVQVAE(nn.Module):
     def decode_from_level(self, intermediates: List[torch.Tensor], level_idx: int) -> torch.Tensor:
         """Reconstructs token logits from the accumulated representation at a specific level."""
         z_k = intermediates[level_idx]
-        pos = torch.arange(self.context_length, device=z_k.device).unsqueeze(0)
-        h_dec = z_k + self.dec_pos_emb(pos)
+        L = z_k.shape[1]
+        h_dec = z_k + self.get_dec_pos_emb(z_k, L)
         for block in self.dec_blocks:
             h_dec = block(h_dec)
         return self.lm_head(self.dec_ln(h_dec))

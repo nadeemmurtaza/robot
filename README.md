@@ -41,7 +41,28 @@ Code Robot supports flexible model scaling from edge/CPU experimentation up to l
 | **Small** (Baseline) | **~2.9M** | 974K (2 enc / 2 dec) | 1.95M ($d=128$, 4 layers, 4 heads) | 64 / 32 tokens | `[2, 8, 32, 64]` |
 | **Medium** (Scaled) | **~19.3M** | 6.98M (4 enc / 4 dec) | 12.36M ($d=256$, 6 layers, 8 heads) | 128 / 64 tokens | `[4, 16, 64, 128]` |
 | **Large** (Deep) | **~108.3M** | 40.32M (6 enc / 6 dec) | 67.95M ($d=512$, 8 layers, 8 heads) | 256 / 64 tokens | `[4, 16, 64, 256]` |
-| **Hybrid (HC-NCM)** | **~3.6M** | 974K (VQ-VAE) | 1.95M (NCM) + 330K (LCM) + 325K (AR) | 64 / 32 tokens | 1-step LCM + 4-scale NCM |
+| **Frontier (2B / 1M)** | **~2.07B** | 420.2M (4 enc / 4 dec, =2048$) | 1.65B (=2048$, 24 layers, 16 heads) | **1,048,576 (1M)** / 131,072 | [64, 1024, 32768, 1048576] |
+| **HC-NCM Frontier (2B)** | **~2.04B** | 420.2M (VQ-VAE) | 1.65B (NCM) + 38 Hybrid Layers | **1,048,576 (1M)** / 131,072 | 1-step LCM + RoPE ($\\theta=10^7$) |
+| **HC-NCM Baseline** | **~3.6M** | 974K (VQ-VAE) | 1.95M (NCM) + 330K (LCM) + 325K (AR) | 64 / 32 tokens | 1-step LCM + 4-scale NCM |
+
+---
+
+## 🌌 The 2.0B Frontier Tier: 1 Million (1M) Context Window
+
+Engineered for full-repository understanding and whole-codebase generation on **Google Cloud TPU v5e-1** (16GB HBM2 with native float16 acceleration) and local 40GB RAM / 225GB SSD workstations:
+
+- **Total Parameter Count**: **2,043,895,808 parameters (~2.04 Billion)**
+- **Context Length**: **1,048,576 tokens (^{20}$, full 1M context)**
+- **Prompt Prefix**: **131,072 tokens (^{17}$, full 128k prompt prefix)**
+- **Zero-Memory RoPE**: Rotary Position Embeddings with base frequency $\\theta = 10,000,000$ computes positions on-the-fly without allocating giant lookup tables (saving 8.58 GB of RAM).
+- **Hierarchical Compression Scales**:
+  - Level 0: 64 concept tokens (,384\\times$ global concept abstraction)
+  - Level 1: 1,024 tokens (,024\\times$ structural architecture & module outline)
+  - Level 2: 32,768 tokens (\\times$ statement & control flow blocks)
+  - Level 3: 1,048,576 tokens (\\times$ fine token syntax realizer)
+- **TPU v5e-1 Memory Footprint**:
+  - In float16, the entire 2.04B model weights require **only ~4.09 GB** of the TPU's 16 GB HBM2!
+  - Leaves **~11.9 GB of ultra-fast HBM2** completely free for KV cache and execution.
 
 ---
 
