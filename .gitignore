@@ -1,0 +1,26 @@
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# Heavy model checkpoints (use releases or separate storage)
+checkpoints/*.pt
+checkpoints/*/*.pt
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# IDE & Editor folders
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS files
+.DS_Store
+Thumbs.db

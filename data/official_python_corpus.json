@@ -1,0 +1,1658 @@
+[
+  {
+    "source": "stdlib:bisect.py",
+    "func_name": "insort_right",
+    "prompt": "# Insert item x in list a, and keep it sorted assuming a is...\ndef insort_right(a, x, lo, hi):\n",
+    "body": "    if key is None:\n        lo = bisect_right(a, x, lo, hi)\n    else:\n        lo = bisect_right(a, key(x), lo, hi, key=key)\n"
+  },
+  {
+    "source": "stdlib:bisect.py",
+    "func_name": "bisect_right",
+    "prompt": "# Return the index where to insert item x in list a, assumi...\ndef bisect_right(a, x, lo, hi):\n",
+    "body": "    if lo < 0:\n        raise ValueError('lo must be non-negative')\n    if hi is None:\n        hi = len(a)\n"
+  },
+  {
+    "source": "stdlib:bisect.py",
+    "func_name": "insort_left",
+    "prompt": "# Insert item x in list a, and keep it sorted assuming a is...\ndef insort_left(a, x, lo, hi):\n",
+    "body": "    if key is None:\n        lo = bisect_left(a, x, lo, hi)\n    else:\n        lo = bisect_left(a, key(x), lo, hi, key=key)\n"
+  },
+  {
+    "source": "stdlib:bisect.py",
+    "func_name": "bisect_left",
+    "prompt": "# Return the index where to insert item x in list a, assumi...\ndef bisect_left(a, x, lo, hi):\n",
+    "body": "    if lo < 0:\n        raise ValueError('lo must be non-negative')\n    if hi is None:\n        hi = len(a)\n"
+  },
+  {
+    "source": "stdlib:heapq.py",
+    "func_name": "heappush",
+    "prompt": "# Push item onto heap, maintaining the heap invariant.\ndef heappush(heap, item):\n",
+    "body": "    heap.append(item)\n    _siftdown(heap, 0, len(heap)-1)\n"
+  },
+  {
+    "source": "stdlib:heapq.py",
+    "func_name": "heappop",
+    "prompt": "# Pop the smallest item off the heap, maintaining the heap ...\ndef heappop(heap):\n",
+    "body": "    lastelt = heap.pop()    # raises appropriate IndexError if heap is empty\n    if heap:\n        returnitem = heap[0]\n        heap[0] = lastelt\n"
+  },
+  {
+    "source": "stdlib:heapq.py",
+    "func_name": "heapreplace",
+    "prompt": "# Pop and return the current smallest value, and add the ne...\ndef heapreplace(heap, item):\n",
+    "body": "    returnitem = heap[0]    # raises appropriate IndexError if heap is empty\n    heap[0] = item\n    _siftup(heap, 0)\n    return returnitem\n"
+  },
+  {
+    "source": "stdlib:heapq.py",
+    "func_name": "heappushpop",
+    "prompt": "# Fast version of a heappush followed by a heappop.\ndef heappushpop(heap, item):\n",
+    "body": "    if heap and heap[0] < item:\n        item, heap[0] = heap[0], item\n        _siftup(heap, 0)\n    return item\n"
+  },
+  {
+    "source": "stdlib:heapq.py",
+    "func_name": "heapify",
+    "prompt": "# Transform list into a heap, in-place, in O(len(x)) time.\ndef heapify(x):\n",
+    "body": "    n = len(x)\n    # Transform bottom-up.  The largest index there's any point to looking at\n    # is the largest with a child index in-range, so must have 2*i + 1 < n,\n    # or i < (n-1)/2.  If n is even = 2*j, this is (2*j-1)/2 = j-1/2 so\n"
+  },
+  {
+    "source": "stdlib:heapq.py",
+    "func_name": "_heappop_max",
+    "prompt": "# Maxheap version of a heappop.\ndef _heappop_max(heap):\n",
+    "body": "    lastelt = heap.pop()    # raises appropriate IndexError if heap is empty\n    if heap:\n        returnitem = heap[0]\n        heap[0] = lastelt\n"
+  },
+  {
+    "source": "stdlib:heapq.py",
+    "func_name": "_heapreplace_max",
+    "prompt": "# Maxheap version of a heappop followed by a heappush.\ndef _heapreplace_max(heap, item):\n",
+    "body": "    returnitem = heap[0]    # raises appropriate IndexError if heap is empty\n    heap[0] = item\n    _siftup_max(heap, 0)\n    return returnitem\n"
+  },
+  {
+    "source": "stdlib:heapq.py",
+    "func_name": "_heapify_max",
+    "prompt": "# Transform list into a maxheap, in-place, in O(len(x)) time.\ndef _heapify_max(x):\n",
+    "body": "    n = len(x)\n    for i in reversed(range(n//2)):\n        _siftup_max(x, i)\n"
+  },
+  {
+    "source": "stdlib:heapq.py",
+    "func_name": "_siftup",
+    "prompt": "# Function _siftup\ndef _siftup(heap, pos):\n",
+    "body": "    endpos = len(heap)\n    startpos = pos\n    newitem = heap[pos]\n    # Bubble up the smaller child until hitting a leaf.\n"
+  },
+  {
+    "source": "stdlib:heapq.py",
+    "func_name": "_siftup_max",
+    "prompt": "# Maxheap variant of _siftup\ndef _siftup_max(heap, pos):\n",
+    "body": "    endpos = len(heap)\n    startpos = pos\n    newitem = heap[pos]\n    # Bubble up the larger child until hitting a leaf.\n"
+  },
+  {
+    "source": "stdlib:heapq.py",
+    "func_name": "nsmallest",
+    "prompt": "# Find the n smallest elements in a dataset.\ndef nsmallest(n, iterable, key):\n",
+    "body": "    if n == 1:\n        it = iter(iterable)\n        sentinel = object()\n        result = min(it, default=sentinel, key=key)\n"
+  },
+  {
+    "source": "stdlib:heapq.py",
+    "func_name": "nlargest",
+    "prompt": "# Find the n largest elements in a dataset.\ndef nlargest(n, iterable, key):\n",
+    "body": "    if n == 1:\n        it = iter(iterable)\n        sentinel = object()\n        result = max(it, default=sentinel, key=key)\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "_sum",
+    "prompt": "# _sum(data) -> (type, sum, count)\ndef _sum(data):\n",
+    "body": "    count = 0\n    types = set()\n    types_add = types.add\n    partials = {}\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "_ss",
+    "prompt": "# Return the exact mean and sum of square deviations of seq...\ndef _ss(data, c):\n",
+    "body": "    if c is not None:\n        T, ssd, count = _sum((d := x - c) * d for x in data)\n        return (T, ssd, c, count)\n    count = 0\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "_isfinite",
+    "prompt": "# Function _isfinite\ndef _isfinite(x):\n",
+    "body": "    try:\n        return x.is_finite()  # Likely a Decimal.\n    except AttributeError:\n        return math.isfinite(x)  # Coerces to float first.\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "_coerce",
+    "prompt": "# Coerce types T and S to a common type, or raise TypeError.\ndef _coerce(T, S):\n",
+    "body": "    assert T is not bool, \"initial type T is bool\"\n    # If the types are the same, no need to coerce anything. Put this\n    # first, so that the usual case (no coercion needed) happens as soon\n    # as possible.\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "_exact_ratio",
+    "prompt": "# Return Real number x to exact (numerator, denominator) pair.\ndef _exact_ratio(x):\n",
+    "body": "    try:\n        return x.as_integer_ratio()\n    except AttributeError:\n        pass\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "_convert",
+    "prompt": "# Convert value to given numeric type T.\ndef _convert(value, T):\n",
+    "body": "    if type(value) is T:\n        # This covers the cases where T is Fraction, or where value is\n        # a NAN or INF (Decimal or float).\n        return value\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "_fail_neg",
+    "prompt": "# Iterate over values, failing if any are less than zero.\ndef _fail_neg(values, errmsg):\n",
+    "body": "    for x in values:\n        if x < 0:\n            raise StatisticsError(errmsg)\n        yield x\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "_rank",
+    "prompt": "# Rank order a dataset. The lowest value has rank 1.\ndef _rank():\n",
+    "body": "    if ties != 'average':\n        raise ValueError(f'Unknown tie resolution method: {ties!r}')\n    if key is not None:\n        data = map(key, data)\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "_integer_sqrt_of_frac_rto",
+    "prompt": "# Square root of n/m, rounded to the nearest integer using ...\ndef _integer_sqrt_of_frac_rto(n, m):\n",
+    "body": "    a = math.isqrt(n // m)\n    return a | (a*a*m != n)\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "_float_sqrt_of_frac",
+    "prompt": "# Square root of n/m as a float, correctly rounded.\ndef _float_sqrt_of_frac(n, m):\n",
+    "body": "    q = (n.bit_length() - m.bit_length() - _sqrt_bit_width) // 2\n    if q >= 0:\n        numerator = _integer_sqrt_of_frac_rto(n, m << 2 * q) << q\n        denominator = 1\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "_decimal_sqrt_of_frac",
+    "prompt": "# Square root of n/m as a Decimal, correctly rounded.\ndef _decimal_sqrt_of_frac(n, m):\n",
+    "body": "    if n <= 0:\n        if not n:\n            return Decimal('0.0')\n        n, m = -n, -m\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "mean",
+    "prompt": "# Return the sample arithmetic mean of data.\ndef mean(data):\n",
+    "body": "    T, total, n = _sum(data)\n    if n < 1:\n        raise StatisticsError('mean requires at least one data point')\n    return _convert(total / n, T)\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "geometric_mean",
+    "prompt": "# Convert data to floats and compute the geometric mean.\ndef geometric_mean(data):\n",
+    "body": "    n = 0\n    found_zero = False\n    def count_positive(iterable):\n        nonlocal n, found_zero\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "harmonic_mean",
+    "prompt": "# Return the harmonic mean of data.\ndef harmonic_mean(data, weights):\n",
+    "body": "    if iter(data) is data:\n        data = list(data)\n    errmsg = 'harmonic mean does not support negative values'\n    n = len(data)\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "median",
+    "prompt": "# Return the median (middle value) of numeric data.\ndef median(data):\n",
+    "body": "    data = sorted(data)\n    n = len(data)\n    if n == 0:\n        raise StatisticsError(\"no median for empty data\")\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "median_low",
+    "prompt": "# Return the low median of numeric data.\ndef median_low(data):\n",
+    "body": "    data = sorted(data)\n    n = len(data)\n    if n == 0:\n        raise StatisticsError(\"no median for empty data\")\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "median_high",
+    "prompt": "# Return the high median of data.\ndef median_high(data):\n",
+    "body": "    data = sorted(data)\n    n = len(data)\n    if n == 0:\n        raise StatisticsError(\"no median for empty data\")\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "median_grouped",
+    "prompt": "# Estimates the median for numeric data binned around the m...\ndef median_grouped(data, interval):\n",
+    "body": "    data = sorted(data)\n    n = len(data)\n    if not n:\n        raise StatisticsError(\"no median for empty data\")\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "multimode",
+    "prompt": "# Return a list of the most frequently occurring values.\ndef multimode(data):\n",
+    "body": "    counts = Counter(iter(data))\n    if not counts:\n        return []\n    maxcount = max(counts.values())\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "kde",
+    "prompt": "# Kernel Density Estimation:  Create a continuous probabili...\ndef kde(data, h, kernel):\n",
+    "body": "    n = len(data)\n    if not n:\n        raise StatisticsError('Empty data sequence')\n\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "quantiles",
+    "prompt": "# Divide *data* into *n* continuous intervals with equal pr...\ndef quantiles(data):\n",
+    "body": "    if n < 1:\n        raise StatisticsError('n must be at least 1')\n    data = sorted(data)\n    ld = len(data)\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "variance",
+    "prompt": "# Return the sample variance of data.\ndef variance(data, xbar):\n",
+    "body": "    T, ss, c, n = _ss(data, xbar)\n    if n < 2:\n        raise StatisticsError('variance requires at least two data points')\n    return _convert(ss / (n - 1), T)\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "pvariance",
+    "prompt": "# Return the population variance of ``data``.\ndef pvariance(data, mu):\n",
+    "body": "    T, ss, c, n = _ss(data, mu)\n    if n < 1:\n        raise StatisticsError('pvariance requires at least one data point')\n    return _convert(ss / n, T)\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "stdev",
+    "prompt": "# Return the square root of the sample variance.\ndef stdev(data, xbar):\n",
+    "body": "    T, ss, c, n = _ss(data, xbar)\n    if n < 2:\n        raise StatisticsError('stdev requires at least two data points')\n    mss = ss / (n - 1)\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "pstdev",
+    "prompt": "# Return the square root of the population variance.\ndef pstdev(data, mu):\n",
+    "body": "    T, ss, c, n = _ss(data, mu)\n    if n < 1:\n        raise StatisticsError('pstdev requires at least one data point')\n    mss = ss / n\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "_mean_stdev",
+    "prompt": "# In one pass, compute the mean and sample standard deviati...\ndef _mean_stdev(data):\n",
+    "body": "    T, ss, xbar, n = _ss(data)\n    if n < 2:\n        raise StatisticsError('stdev requires at least two data points')\n    mss = ss / (n - 1)\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "_normal_dist_inv_cdf",
+    "prompt": "# Function _normal_dist_inv_cdf\ndef _normal_dist_inv_cdf(p, mu, sigma):\n",
+    "body": "    q = p - 0.5\n    if fabs(q) <= 0.425:\n        r = 0.180625 - q * q\n        # Hash sum: 55.88319_28806_14901_4439\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "_quartic_invcdf_estimate",
+    "prompt": "# Function _quartic_invcdf_estimate\ndef _quartic_invcdf_estimate(p):\n",
+    "body": "    sign, p = (1.0, p) if p <= 1/2 else (-1.0, 1.0 - p)\n    x = (2.0 * p) ** 0.4258865685331 - 1.0\n    if p >= 0.004 < 0.499:\n        x += 0.026818732 * sin(7.101753784 * p + 2.73230839482953)\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "_triweight_invcdf_estimate",
+    "prompt": "# Function _triweight_invcdf_estimate\ndef _triweight_invcdf_estimate(p):\n",
+    "body": "    sign, p = (1.0, p) if p <= 1/2 else (-1.0, 1.0 - p)\n    x = (2.0 * p) ** 0.3400218741872791 - 1.0\n    return x * sign\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "kde_random",
+    "prompt": "# Return a function that makes a random selection from the ...\ndef kde_random(data, h, kernel):\n",
+    "body": "    n = len(data)\n    if not n:\n        raise StatisticsError('Empty data sequence')\n\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "count_positive",
+    "prompt": "# Function count_positive\ndef count_positive(iterable):\n",
+    "body": "        nonlocal n, found_zero\n        for n, x in enumerate(iterable, start=1):\n            if x > 0.0 or math.isnan(x):\n                yield x\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "from_samples",
+    "prompt": "# Make a normal distribution instance from sample data.\ndef from_samples(cls, data):\n",
+    "body": "        return cls(*_mean_stdev(data))\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "samples",
+    "prompt": "# Generate *n* samples for a given mean and standard deviat...\ndef samples(self, n):\n",
+    "body": "        rnd = random.random if seed is None else random.Random(seed).random\n        inv_cdf = _normal_dist_inv_cdf\n        mu = self._mu\n        sigma = self._sigma\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "pdf",
+    "prompt": "# Probability density function.  P(x <= X < x+dx) / dx\ndef pdf(self, x):\n",
+    "body": "        variance = self._sigma * self._sigma\n        if not variance:\n            raise StatisticsError('pdf() not defined when sigma is zero')\n        diff = x - self._mu\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "cdf",
+    "prompt": "# Cumulative distribution function.  P(X <= x)\ndef cdf(self, x):\n",
+    "body": "        if not self._sigma:\n            raise StatisticsError('cdf() not defined when sigma is zero')\n        return 0.5 * (1.0 + erf((x - self._mu) / (self._sigma * _SQRT2)))\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "inv_cdf",
+    "prompt": "# Inverse cumulative distribution function.  x : P(X <= x) = p\ndef inv_cdf(self, p):\n",
+    "body": "        if p <= 0.0 or p >= 1.0:\n            raise StatisticsError('p must be in the range 0.0 < p < 1.0')\n        return _normal_dist_inv_cdf(p, self._mu, self._sigma)\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "quantiles",
+    "prompt": "# Divide into *n* continuous intervals with equal probability.\ndef quantiles(self, n):\n",
+    "body": "        return [self.inv_cdf(i / n) for i in range(1, n)]\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "zscore",
+    "prompt": "# Compute the Standard Score.  (x - mean) / stdev\ndef zscore(self, x):\n",
+    "body": "        if not self._sigma:\n            raise StatisticsError('zscore() not defined when sigma is zero')\n        return (x - self._mu) / self._sigma\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "mean",
+    "prompt": "# Arithmetic mean of the normal distribution.\ndef mean(self):\n",
+    "body": "        return self._mu\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "median",
+    "prompt": "# Return the median of the normal distribution\ndef median(self):\n",
+    "body": "        return self._mu\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "mode",
+    "prompt": "# Return the mode of the normal distribution\ndef mode(self):\n",
+    "body": "        return self._mu\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "stdev",
+    "prompt": "# Standard deviation of the normal distribution.\ndef stdev(self):\n",
+    "body": "        return self._sigma\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "variance",
+    "prompt": "# Square of the standard deviation.\ndef variance(self):\n",
+    "body": "        return self._sigma * self._sigma\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "f_inv",
+    "prompt": "# Return x such that f(x) \u2248 y within the specified tolerance.\ndef f_inv(y):\n",
+    "body": "        x = f_inv_estimate(y)\n        while abs(diff := f(x) - y) > tolerance:\n            x -= diff / f_prime(x)\n        return x\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "rand",
+    "prompt": "# Function rand\ndef rand():\n",
+    "body": "        return choice(data) + h * kernel_invcdf(random())\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "pdf",
+    "prompt": "# Function pdf\ndef pdf(x):\n",
+    "body": "            n = len(data)\n            return sum(K((x - x_i) / h) for x_i in data) / (n * h)\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "cdf",
+    "prompt": "# Function cdf\ndef cdf(x):\n",
+    "body": "            n = len(data)\n            return sum(W((x - x_i) / h) for x_i in data) / n\n"
+  },
+  {
+    "source": "stdlib:statistics.py",
+    "func_name": "count",
+    "prompt": "# Function count\ndef count(iterable):\n",
+    "body": "                nonlocal n\n                for n, x in enumerate(iterable, start=1):\n                    yield x\n"
+  },
+  {
+    "source": "stdlib:random.py",
+    "func_name": "_test_generator",
+    "prompt": "# Function _test_generator\ndef _test_generator(n, func, args):\n",
+    "body": "    from statistics import stdev, fmean as mean\n    from time import perf_counter\n\n    t0 = perf_counter()\n"
+  },
+  {
+    "source": "stdlib:random.py",
+    "func_name": "_test",
+    "prompt": "# Function _test\ndef _test(N):\n",
+    "body": "    _test_generator(N, random, ())\n    _test_generator(N, normalvariate, (0.0, 1.0))\n    _test_generator(N, lognormvariate, (0.0, 1.0))\n    _test_generator(N, vonmisesvariate, (0.0, 1.0))\n"
+  },
+  {
+    "source": "stdlib:random.py",
+    "func_name": "_parse_args",
+    "prompt": "# Function _parse_args\ndef _parse_args(arg_list):\n",
+    "body": "    import argparse\n    parser = argparse.ArgumentParser(\n        formatter_class=argparse.RawTextHelpFormatter)\n    group = parser.add_mutually_exclusive_group()\n"
+  },
+  {
+    "source": "stdlib:random.py",
+    "func_name": "getstate",
+    "prompt": "# Return internal state; can be passed to setstate() later.\ndef getstate(self):\n",
+    "body": "        return self.VERSION, super().getstate(), self.gauss_next\n"
+  },
+  {
+    "source": "stdlib:random.py",
+    "func_name": "setstate",
+    "prompt": "# Restore internal state from object returned by getstate().\ndef setstate(self, state):\n",
+    "body": "        version = state[0]\n        if version == 3:\n            version, internalstate, self.gauss_next = state\n            super().setstate(internalstate)\n"
+  },
+  {
+    "source": "stdlib:random.py",
+    "func_name": "randbytes",
+    "prompt": "# Generate n random bytes.\ndef randbytes(self, n):\n",
+    "body": "        return self.getrandbits(n * 8).to_bytes(n, 'little')\n"
+  },
+  {
+    "source": "stdlib:random.py",
+    "func_name": "randint",
+    "prompt": "# Return random integer in range [a, b], including both end...\ndef randint(self, a, b):\n",
+    "body": "        return self.randrange(a, b+1)\n"
+  },
+  {
+    "source": "stdlib:random.py",
+    "func_name": "choice",
+    "prompt": "# Choose a random element from a non-empty sequence.\ndef choice(self, seq):\n",
+    "body": "        if not len(seq):\n            raise IndexError('Cannot choose from an empty sequence')\n        return seq[self._randbelow(len(seq))]\n"
+  },
+  {
+    "source": "stdlib:random.py",
+    "func_name": "shuffle",
+    "prompt": "# Shuffle list x in place, and return None.\ndef shuffle(self, x):\n",
+    "body": "        randbelow = self._randbelow\n        for i in reversed(range(1, len(x))):\n            # pick an element in x[:i+1] with which to exchange x[i]\n            j = randbelow(i + 1)\n"
+  },
+  {
+    "source": "stdlib:random.py",
+    "func_name": "sample",
+    "prompt": "# Chooses k unique random elements from a population sequence.\ndef sample(self, population, k):\n",
+    "body": "        if not isinstance(population, _Sequence):\n            raise TypeError(\"Population must be a sequence.  \"\n                            \"For dicts or sets, use sorted(d).\")\n        n = len(population)\n"
+  },
+  {
+    "source": "stdlib:random.py",
+    "func_name": "uniform",
+    "prompt": "# Get a random number in the range [a, b) or [a, b] dependi...\ndef uniform(self, a, b):\n",
+    "body": "        return a + (b - a) * self.random()\n"
+  },
+  {
+    "source": "stdlib:random.py",
+    "func_name": "normalvariate",
+    "prompt": "# Normal distribution.\ndef normalvariate(self, mu, sigma):\n",
+    "body": "        random = self.random\n        while True:\n            u1 = random()\n            u2 = 1.0 - random()\n"
+  },
+  {
+    "source": "stdlib:random.py",
+    "func_name": "lognormvariate",
+    "prompt": "# Log normal distribution.\ndef lognormvariate(self, mu, sigma):\n",
+    "body": "        return _exp(self.normalvariate(mu, sigma))\n"
+  },
+  {
+    "source": "stdlib:random.py",
+    "func_name": "expovariate",
+    "prompt": "# Exponential distribution.\ndef expovariate(self, lambd):\n",
+    "body": "        return -_log(1.0 - self.random()) / lambd\n"
+  },
+  {
+    "source": "stdlib:random.py",
+    "func_name": "vonmisesvariate",
+    "prompt": "# Circular data distribution.\ndef vonmisesvariate(self, mu, kappa):\n",
+    "body": "        random = self.random\n        if kappa <= 1e-6:\n            return TWOPI * random()\n\n"
+  },
+  {
+    "source": "stdlib:random.py",
+    "func_name": "gammavariate",
+    "prompt": "# Gamma distribution.  Not the gamma function!\ndef gammavariate(self, alpha, beta):\n",
+    "body": "        if alpha <= 0.0 or beta <= 0.0:\n            raise ValueError('gammavariate: alpha and beta must be > 0.0')\n\n        random = self.random\n"
+  },
+  {
+    "source": "stdlib:random.py",
+    "func_name": "betavariate",
+    "prompt": "# Beta distribution.\ndef betavariate(self, alpha, beta):\n",
+    "body": "        y = self.gammavariate(alpha, 1.0)\n        if y:\n            return y / (y + self.gammavariate(beta, 1.0))\n        return 0.0\n"
+  },
+  {
+    "source": "stdlib:random.py",
+    "func_name": "paretovariate",
+    "prompt": "# Pareto distribution.  alpha is the shape parameter.\ndef paretovariate(self, alpha):\n",
+    "body": "        u = 1.0 - self.random()\n        return u ** (-1.0 / alpha)\n"
+  },
+  {
+    "source": "stdlib:random.py",
+    "func_name": "weibullvariate",
+    "prompt": "# Weibull distribution.\ndef weibullvariate(self, alpha, beta):\n",
+    "body": "        u = 1.0 - self.random()\n        return alpha * (-_log(u)) ** (1.0 / beta)\n"
+  },
+  {
+    "source": "stdlib:random.py",
+    "func_name": "random",
+    "prompt": "# Get the next random number in the range 0.0 <= X < 1.0.\ndef random(self):\n",
+    "body": "        return (int.from_bytes(_urandom(7)) >> 3) * RECIP_BPF\n"
+  },
+  {
+    "source": "stdlib:random.py",
+    "func_name": "getrandbits",
+    "prompt": "# getrandbits(k) -> x.  Generates an int with k random bits.\ndef getrandbits(self, k):\n",
+    "body": "        if k < 0:\n            raise ValueError('number of bits must be non-negative')\n        numbytes = (k + 7) // 8                       # bits / 8 and rounded up\n        x = int.from_bytes(_urandom(numbytes))\n"
+  },
+  {
+    "source": "stdlib:random.py",
+    "func_name": "seed",
+    "prompt": "# Stub method.  Not used for a system random number generator.\ndef seed(self):\n",
+    "body": "        return None\n"
+  },
+  {
+    "source": "stdlib:random.py",
+    "func_name": "_notimplemented",
+    "prompt": "# Method should not be called for a system random number ge...\ndef _notimplemented(self):\n",
+    "body": "        raise NotImplementedError('System entropy source does not have state.')\n"
+  },
+  {
+    "source": "stdlib:string.py",
+    "func_name": "capwords",
+    "prompt": "# capwords(s [,sep]) -> string\ndef capwords(s, sep):\n",
+    "body": "    return (sep or ' ').join(map(str.capitalize, s.split(sep)))\n"
+  },
+  {
+    "source": "stdlib:string.py",
+    "func_name": "_invalid",
+    "prompt": "# Function _invalid\ndef _invalid(self, mo):\n",
+    "body": "        i = mo.start('invalid')\n        lines = self.template[:i].splitlines(keepends=True)\n        if not lines:\n            colno = 1\n"
+  },
+  {
+    "source": "stdlib:string.py",
+    "func_name": "substitute",
+    "prompt": "# Function substitute\ndef substitute():\n",
+    "body": "        if mapping is _sentinel_dict:\n            mapping = kws\n        elif kws:\n            mapping = _ChainMap(kws, mapping)\n"
+  },
+  {
+    "source": "stdlib:string.py",
+    "func_name": "safe_substitute",
+    "prompt": "# Function safe_substitute\ndef safe_substitute():\n",
+    "body": "        if mapping is _sentinel_dict:\n            mapping = kws\n        elif kws:\n            mapping = _ChainMap(kws, mapping)\n"
+  },
+  {
+    "source": "stdlib:string.py",
+    "func_name": "format",
+    "prompt": "# Function format\ndef format():\n",
+    "body": "        return self.vformat(format_string, args, kwargs)\n"
+  },
+  {
+    "source": "stdlib:string.py",
+    "func_name": "vformat",
+    "prompt": "# Function vformat\ndef vformat(self, format_string, args, kwargs):\n",
+    "body": "        used_args = set()\n        result, _ = self._vformat(format_string, args, kwargs, used_args, 2)\n        self.check_unused_args(used_args, args, kwargs)\n        return result\n"
+  },
+  {
+    "source": "stdlib:string.py",
+    "func_name": "get_value",
+    "prompt": "# Function get_value\ndef get_value(self, key, args, kwargs):\n",
+    "body": "        if isinstance(key, int):\n            return args[key]\n        else:\n            return kwargs[key]\n"
+  },
+  {
+    "source": "stdlib:string.py",
+    "func_name": "check_unused_args",
+    "prompt": "# Function check_unused_args\ndef check_unused_args(self, used_args, args, kwargs):\n",
+    "body": "        pass\n"
+  },
+  {
+    "source": "stdlib:string.py",
+    "func_name": "format_field",
+    "prompt": "# Function format_field\ndef format_field(self, value, format_spec):\n",
+    "body": "        return format(value, format_spec)\n"
+  },
+  {
+    "source": "stdlib:string.py",
+    "func_name": "convert_field",
+    "prompt": "# Function convert_field\ndef convert_field(self, value, conversion):\n",
+    "body": "        if conversion is None:\n            return value\n        elif conversion == 's':\n            return str(value)\n"
+  },
+  {
+    "source": "stdlib:string.py",
+    "func_name": "parse",
+    "prompt": "# Function parse\ndef parse(self, format_string):\n",
+    "body": "        return _string.formatter_parser(format_string)\n"
+  },
+  {
+    "source": "stdlib:string.py",
+    "func_name": "get_field",
+    "prompt": "# Function get_field\ndef get_field(self, field_name, args, kwargs):\n",
+    "body": "        first, rest = _string.formatter_field_name_split(field_name)\n\n        obj = self.get_value(first, args, kwargs)\n\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "wraps",
+    "prompt": "# Decorator factory to apply update_wrapper() to a wrapper ...\ndef wraps(wrapped, assigned, updated):\n",
+    "body": "    return partial(update_wrapper, wrapped=wrapped,\n                   assigned=assigned, updated=updated)\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "_gt_from_lt",
+    "prompt": "# Return a > b.  Computed by @total_ordering from (not a < ...\ndef _gt_from_lt(self, other):\n",
+    "body": "    op_result = type(self).__lt__(self, other)\n    if op_result is NotImplemented:\n        return op_result\n    return not op_result and self != other\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "_le_from_lt",
+    "prompt": "# Return a <= b.  Computed by @total_ordering from (a < b) ...\ndef _le_from_lt(self, other):\n",
+    "body": "    op_result = type(self).__lt__(self, other)\n    if op_result is NotImplemented:\n        return op_result\n    return op_result or self == other\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "_ge_from_lt",
+    "prompt": "# Return a >= b.  Computed by @total_ordering from (not a <...\ndef _ge_from_lt(self, other):\n",
+    "body": "    op_result = type(self).__lt__(self, other)\n    if op_result is NotImplemented:\n        return op_result\n    return not op_result\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "_ge_from_le",
+    "prompt": "# Return a >= b.  Computed by @total_ordering from (not a <...\ndef _ge_from_le(self, other):\n",
+    "body": "    op_result = type(self).__le__(self, other)\n    if op_result is NotImplemented:\n        return op_result\n    return not op_result or self == other\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "_lt_from_le",
+    "prompt": "# Return a < b.  Computed by @total_ordering from (a <= b) ...\ndef _lt_from_le(self, other):\n",
+    "body": "    op_result = type(self).__le__(self, other)\n    if op_result is NotImplemented:\n        return op_result\n    return op_result and self != other\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "_gt_from_le",
+    "prompt": "# Return a > b.  Computed by @total_ordering from (not a <=...\ndef _gt_from_le(self, other):\n",
+    "body": "    op_result = type(self).__le__(self, other)\n    if op_result is NotImplemented:\n        return op_result\n    return not op_result\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "_lt_from_gt",
+    "prompt": "# Return a < b.  Computed by @total_ordering from (not a > ...\ndef _lt_from_gt(self, other):\n",
+    "body": "    op_result = type(self).__gt__(self, other)\n    if op_result is NotImplemented:\n        return op_result\n    return not op_result and self != other\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "_ge_from_gt",
+    "prompt": "# Return a >= b.  Computed by @total_ordering from (a > b) ...\ndef _ge_from_gt(self, other):\n",
+    "body": "    op_result = type(self).__gt__(self, other)\n    if op_result is NotImplemented:\n        return op_result\n    return op_result or self == other\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "_le_from_gt",
+    "prompt": "# Return a <= b.  Computed by @total_ordering from (not a >...\ndef _le_from_gt(self, other):\n",
+    "body": "    op_result = type(self).__gt__(self, other)\n    if op_result is NotImplemented:\n        return op_result\n    return not op_result\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "_le_from_ge",
+    "prompt": "# Return a <= b.  Computed by @total_ordering from (not a >...\ndef _le_from_ge(self, other):\n",
+    "body": "    op_result = type(self).__ge__(self, other)\n    if op_result is NotImplemented:\n        return op_result\n    return not op_result or self == other\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "_gt_from_ge",
+    "prompt": "# Return a > b.  Computed by @total_ordering from (a >= b) ...\ndef _gt_from_ge(self, other):\n",
+    "body": "    op_result = type(self).__ge__(self, other)\n    if op_result is NotImplemented:\n        return op_result\n    return op_result and self != other\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "_lt_from_ge",
+    "prompt": "# Return a < b.  Computed by @total_ordering from (not a >=...\ndef _lt_from_ge(self, other):\n",
+    "body": "    op_result = type(self).__ge__(self, other)\n    if op_result is NotImplemented:\n        return op_result\n    return not op_result\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "total_ordering",
+    "prompt": "# Class decorator that fills in missing ordering methods\ndef total_ordering(cls):\n",
+    "body": "    roots = {op for op in _convert if getattr(cls, op, None) is not getattr(object, op, None)}\n    if not roots:\n        raise ValueError('must define at least one ordering operation: < > <= >=')\n    root = max(roots)       # prefer __lt__ to __le__ to __gt__ to __ge__\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "cmp_to_key",
+    "prompt": "# Convert a cmp= function into a key= function\ndef cmp_to_key(mycmp):\n",
+    "body": "    class K(object):\n        __slots__ = ['obj']\n        def __init__(self, obj):\n            self.obj = obj\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "_unwrap_partial",
+    "prompt": "# Function _unwrap_partial\ndef _unwrap_partial(func):\n",
+    "body": "    while isinstance(func, partial):\n        func = func.func\n    return func\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "lru_cache",
+    "prompt": "# Least-recently-used cache decorator.\ndef lru_cache(maxsize, typed):\n",
+    "body": "    if isinstance(maxsize, int):\n        # Negative maxsize is treated as 0\n        if maxsize < 0:\n            maxsize = 0\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "_lru_cache_wrapper",
+    "prompt": "# Function _lru_cache_wrapper\ndef _lru_cache_wrapper(user_function, maxsize, typed, _CacheInfo):\n",
+    "body": "    sentinel = object()          # unique object used to signal cache misses\n    make_key = _make_key         # build a key from the function arguments\n    PREV, NEXT, KEY, RESULT = 0, 1, 2, 3   # names for the link fields\n\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "cache",
+    "prompt": "# Simple lightweight unbounded cache.  Sometimes called \"me...\ndef cache():\n",
+    "body": "    return lru_cache(maxsize=None)(user_function)\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "_c3_mro",
+    "prompt": "# Computes the method resolution order using extended C3 li...\ndef _c3_mro(cls, abcs):\n",
+    "body": "    for i, base in enumerate(reversed(cls.__bases__)):\n        if hasattr(base, '__abstractmethods__'):\n            boundary = len(cls.__bases__) - i\n            break   # Bases up to the last explicit ABC are considered first.\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "singledispatch",
+    "prompt": "# Single-dispatch generic function decorator.\ndef singledispatch(func):\n",
+    "body": "    import types, weakref\n\n    registry = {}\n    dispatch_cache = weakref.WeakKeyDictionary()\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "_make_unbound_method",
+    "prompt": "# Function _make_unbound_method\ndef _make_unbound_method(self):\n",
+    "body": "        def _method(cls_or_self, /, *args, **keywords):\n            keywords = {**self.keywords, **keywords}\n            return self.func(cls_or_self, *self.args, *args, **keywords)\n        _method.__isabstractmethod__ = self.__isabstractmethod__\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "decorating_function",
+    "prompt": "# Function decorating_function\ndef decorating_function(user_function):\n",
+    "body": "        wrapper = _lru_cache_wrapper(user_function, maxsize, typed, _CacheInfo)\n        wrapper.cache_parameters = lambda : {'maxsize': maxsize, 'typed': typed}\n        return update_wrapper(wrapper, user_function)\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "cache_info",
+    "prompt": "# Report cache statistics\ndef cache_info():\n",
+    "body": "        with lock:\n            return _CacheInfo(hits, misses, maxsize, cache_len())\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "cache_clear",
+    "prompt": "# Clear the cache and cache statistics\ndef cache_clear():\n",
+    "body": "        nonlocal hits, misses, full\n        with lock:\n            cache.clear()\n            root[:] = [root, root, None, None]\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "is_related",
+    "prompt": "# Function is_related\ndef is_related(typ):\n",
+    "body": "        return (typ not in bases and hasattr(typ, '__mro__')\n                                 and not isinstance(typ, GenericAlias)\n                                 and issubclass(cls, typ))\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "is_strict_base",
+    "prompt": "# Function is_strict_base\ndef is_strict_base(typ):\n",
+    "body": "        for other in types:\n            if typ != other and typ in other.__mro__:\n                return True\n        return False\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "_is_union_type",
+    "prompt": "# Function _is_union_type\ndef _is_union_type(cls):\n",
+    "body": "        from typing import get_origin, Union\n        return get_origin(cls) in {Union, types.UnionType}\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "register",
+    "prompt": "# generic_func.register(cls, func) -> func\ndef register(cls, func):\n",
+    "body": "        nonlocal cache_token\n        if _is_valid_dispatch_type(cls):\n            if func is None:\n                return lambda f: register(cls, f)\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "wrapper",
+    "prompt": "# Function wrapper\ndef wrapper():\n",
+    "body": "        if not args:\n            raise TypeError(f'{funcname} requires at least '\n                            '1 positional argument')\n        return dispatch(args[0].__class__)(*args, **kw)\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "register",
+    "prompt": "# generic_method.register(cls, func) -> func\ndef register(self, cls, method):\n",
+    "body": "        return self.dispatcher.register(cls, func=method)\n"
+  },
+  {
+    "source": "stdlib:functools.py",
+    "func_name": "_method",
+    "prompt": "# Function _method\ndef _method():\n",
+    "body": "            keywords = {**self.keywords, **keywords}\n            return self.func(cls_or_self, *self.args, *args, **keywords)\n"
+  },
+  {
+    "source": "stdlib:copy.py",
+    "func_name": "_copy_immutable",
+    "prompt": "# Function _copy_immutable\ndef _copy_immutable(x):\n",
+    "body": "    return x\n"
+  },
+  {
+    "source": "stdlib:copy.py",
+    "func_name": "_deepcopy_atomic",
+    "prompt": "# Function _deepcopy_atomic\ndef _deepcopy_atomic(x, memo):\n",
+    "body": "    return x\n"
+  },
+  {
+    "source": "stdlib:copy.py",
+    "func_name": "_deepcopy_dict",
+    "prompt": "# Function _deepcopy_dict\ndef _deepcopy_dict(x, memo, deepcopy):\n",
+    "body": "    y = {}\n    memo[id(x)] = y\n    for key, value in x.items():\n        y[deepcopy(key, memo)] = deepcopy(value, memo)\n"
+  },
+  {
+    "source": "stdlib:copy.py",
+    "func_name": "_deepcopy_method",
+    "prompt": "# Function _deepcopy_method\ndef _deepcopy_method(x, memo):\n",
+    "body": "    return type(x)(x.__func__, deepcopy(x.__self__, memo))\n"
+  },
+  {
+    "source": "stdlib:copy.py",
+    "func_name": "_reconstruct",
+    "prompt": "# Function _reconstruct\ndef _reconstruct(x, memo, func, args, state, listiter, dictiter):\n",
+    "body": "    deep = memo is not None\n    if deep and args:\n        args = (deepcopy(arg, memo) for arg in args)\n    y = func(*args)\n"
+  },
+  {
+    "source": "stdlib:copy.py",
+    "func_name": "replace",
+    "prompt": "# Return a new object replacing specified fields with new v...\ndef replace():\n",
+    "body": "    cls = obj.__class__\n    func = getattr(cls, '__replace__', None)\n    if func is None:\n        raise TypeError(f\"replace() does not support {cls.__name__} objects\")\n"
+  },
+  {
+    "source": "stdlib:colorsys.py",
+    "func_name": "rgb_to_yiq",
+    "prompt": "# Function rgb_to_yiq\ndef rgb_to_yiq(r, g, b):\n",
+    "body": "    y = 0.30*r + 0.59*g + 0.11*b\n    i = 0.74*(r-y) - 0.27*(b-y)\n    q = 0.48*(r-y) + 0.41*(b-y)\n    return (y, i, q)\n"
+  },
+  {
+    "source": "stdlib:colorsys.py",
+    "func_name": "yiq_to_rgb",
+    "prompt": "# Function yiq_to_rgb\ndef yiq_to_rgb(y, i, q):\n",
+    "body": "    r = y + 0.9468822170900693*i + 0.6235565819861433*q\n    g = y - 0.27478764629897834*i - 0.6356910791873801*q\n    b = y - 1.1085450346420322*i + 1.7090069284064666*q\n\n"
+  },
+  {
+    "source": "stdlib:colorsys.py",
+    "func_name": "rgb_to_hls",
+    "prompt": "# Function rgb_to_hls\ndef rgb_to_hls(r, g, b):\n",
+    "body": "    maxc = max(r, g, b)\n    minc = min(r, g, b)\n    sumc = (maxc+minc)\n    rangec = (maxc-minc)\n"
+  },
+  {
+    "source": "stdlib:colorsys.py",
+    "func_name": "hls_to_rgb",
+    "prompt": "# Function hls_to_rgb\ndef hls_to_rgb(h, l, s):\n",
+    "body": "    if s == 0.0:\n        return l, l, l\n    if l <= 0.5:\n        m2 = l * (1.0+s)\n"
+  },
+  {
+    "source": "stdlib:colorsys.py",
+    "func_name": "rgb_to_hsv",
+    "prompt": "# Function rgb_to_hsv\ndef rgb_to_hsv(r, g, b):\n",
+    "body": "    maxc = max(r, g, b)\n    minc = min(r, g, b)\n    rangec = (maxc-minc)\n    v = maxc\n"
+  },
+  {
+    "source": "stdlib:colorsys.py",
+    "func_name": "hsv_to_rgb",
+    "prompt": "# Function hsv_to_rgb\ndef hsv_to_rgb(h, s, v):\n",
+    "body": "    if s == 0.0:\n        return v, v, v\n    i = int(h*6.0) # XXX assume int() truncates!\n    f = (h*6.0) - i\n"
+  },
+  {
+    "source": "stdlib:fnmatch.py",
+    "func_name": "fnmatch",
+    "prompt": "# Test whether FILENAME matches PATTERN.\ndef fnmatch(name, pat):\n",
+    "body": "    name = os.path.normcase(name)\n    pat = os.path.normcase(pat)\n    return fnmatchcase(name, pat)\n"
+  },
+  {
+    "source": "stdlib:fnmatch.py",
+    "func_name": "_compile_pattern",
+    "prompt": "# Function _compile_pattern\ndef _compile_pattern(pat):\n",
+    "body": "    if isinstance(pat, bytes):\n        pat_str = str(pat, 'ISO-8859-1')\n        res_str = translate(pat_str)\n        res = bytes(res_str, 'ISO-8859-1')\n"
+  },
+  {
+    "source": "stdlib:fnmatch.py",
+    "func_name": "fnmatchcase",
+    "prompt": "# Test whether FILENAME matches PATTERN, including case.\ndef fnmatchcase(name, pat):\n",
+    "body": "    match = _compile_pattern(pat)\n    return match(name) is not None\n"
+  },
+  {
+    "source": "stdlib:fnmatch.py",
+    "func_name": "translate",
+    "prompt": "# Translate a shell PATTERN to a regular expression.\ndef translate(pat):\n",
+    "body": "    STAR = object()\n    parts = _translate(pat, STAR, '.')\n    return _join_translated_parts(parts, STAR)\n"
+  },
+  {
+    "source": "stdlib:fnmatch.py",
+    "func_name": "_join_translated_parts",
+    "prompt": "# Function _join_translated_parts\ndef _join_translated_parts(inp, STAR):\n",
+    "body": "    res = []\n    add = res.append\n    i, n = 0, len(inp)\n    # Fixed pieces at the start?\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "isleap",
+    "prompt": "# Return True for leap years, False for non-leap years.\ndef isleap(year):\n",
+    "body": "    return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "leapdays",
+    "prompt": "# Return number of leap years in range [y1, y2).\ndef leapdays(y1, y2):\n",
+    "body": "    y1 -= 1\n    y2 -= 1\n    return (y2//4 - y1//4) - (y2//100 - y1//100) + (y2//400 - y1//400)\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "weekday",
+    "prompt": "# Return weekday (0-6 ~ Mon-Sun) for year, month (1-12), da...\ndef weekday(year, month, day):\n",
+    "body": "    if not datetime.MINYEAR <= year <= datetime.MAXYEAR:\n        year = 2000 + year % 400\n    return Day(datetime.date(year, month, day).weekday())\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "_validate_month",
+    "prompt": "# Function _validate_month\ndef _validate_month(month):\n",
+    "body": "    if not 1 <= month <= 12:\n        raise IllegalMonthError(month)\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "monthrange",
+    "prompt": "# Return weekday of first day of month (0-6 ~ Mon-Sun)\ndef monthrange(year, month):\n",
+    "body": "    _validate_month(month)\n    day1 = weekday(year, month, 1)\n    ndays = mdays[month] + (month == FEBRUARY and isleap(year))\n    return day1, ndays\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "_monthlen",
+    "prompt": "# Function _monthlen\ndef _monthlen(year, month):\n",
+    "body": "    return mdays[month] + (month == FEBRUARY and isleap(year))\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "_prevmonth",
+    "prompt": "# Function _prevmonth\ndef _prevmonth(year, month):\n",
+    "body": "    if month == 1:\n        return year-1, 12\n    else:\n        return year, month-1\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "_nextmonth",
+    "prompt": "# Function _nextmonth\ndef _nextmonth(year, month):\n",
+    "body": "    if month == 12:\n        return year+1, 1\n    else:\n        return year, month+1\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "setfirstweekday",
+    "prompt": "# Function setfirstweekday\ndef setfirstweekday(firstweekday):\n",
+    "body": "    if not MONDAY <= firstweekday <= SUNDAY:\n        raise IllegalWeekdayError(firstweekday)\n    c.firstweekday = firstweekday\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "format",
+    "prompt": "# Prints multi-column formatting for year calendars\ndef format(cols, colwidth, spacing):\n",
+    "body": "    print(formatstring(cols, colwidth, spacing))\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "formatstring",
+    "prompt": "# Returns a string formatted from n strings, centered withi...\ndef formatstring(cols, colwidth, spacing):\n",
+    "body": "    spacing *= ' '\n    return spacing.join(c.center(colwidth) for c in cols)\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "timegm",
+    "prompt": "# Unrelated but handy function to calculate Unix timestamp ...\ndef timegm(tuple):\n",
+    "body": "    year, month, day, hour, minute, second = tuple[:6]\n    days = datetime.date(year, month, 1).toordinal() - _EPOCH_ORD + day - 1\n    hours = days*24 + hour\n    minutes = hours*60 + minute\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "main",
+    "prompt": "# Function main\ndef main(args):\n",
+    "body": "    import argparse\n    parser = argparse.ArgumentParser()\n    textgroup = parser.add_argument_group('text only arguments')\n    htmlgroup = parser.add_argument_group('html only arguments')\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "getfirstweekday",
+    "prompt": "# Function getfirstweekday\ndef getfirstweekday(self):\n",
+    "body": "        return self._firstweekday % 7\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "setfirstweekday",
+    "prompt": "# Function setfirstweekday\ndef setfirstweekday(self, firstweekday):\n",
+    "body": "        self._firstweekday = firstweekday\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "iterweekdays",
+    "prompt": "# Return an iterator for one week of weekday numbers starti...\ndef iterweekdays(self):\n",
+    "body": "        for i in range(self.firstweekday, self.firstweekday + 7):\n            yield i%7\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "itermonthdates",
+    "prompt": "# Return an iterator for one month. The iterator will yield...\ndef itermonthdates(self, year, month):\n",
+    "body": "        for y, m, d in self.itermonthdays3(year, month):\n            yield datetime.date(y, m, d)\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "itermonthdays",
+    "prompt": "# Like itermonthdates(), but will yield day numbers. For da...\ndef itermonthdays(self, year, month):\n",
+    "body": "        day1, ndays = monthrange(year, month)\n        days_before = (day1 - self.firstweekday) % 7\n        yield from repeat(0, days_before)\n        yield from range(1, ndays + 1)\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "itermonthdays2",
+    "prompt": "# Like itermonthdates(), but will yield (day number, weekda...\ndef itermonthdays2(self, year, month):\n",
+    "body": "        for i, d in enumerate(self.itermonthdays(year, month), self.firstweekday):\n            yield d, i % 7\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "itermonthdays3",
+    "prompt": "# Like itermonthdates(), but will yield (year, month, day) ...\ndef itermonthdays3(self, year, month):\n",
+    "body": "        day1, ndays = monthrange(year, month)\n        days_before = (day1 - self.firstweekday) % 7\n        days_after = (self.firstweekday - day1 - ndays) % 7\n        y, m = _prevmonth(year, month)\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "itermonthdays4",
+    "prompt": "# Like itermonthdates(), but will yield (year, month, day, ...\ndef itermonthdays4(self, year, month):\n",
+    "body": "        for i, (y, m, d) in enumerate(self.itermonthdays3(year, month)):\n            yield y, m, d, (self.firstweekday + i) % 7\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "monthdatescalendar",
+    "prompt": "# Return a matrix (list of lists) representing a month's ca...\ndef monthdatescalendar(self, year, month):\n",
+    "body": "        dates = list(self.itermonthdates(year, month))\n        return [ dates[i:i+7] for i in range(0, len(dates), 7) ]\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "monthdays2calendar",
+    "prompt": "# Return a matrix representing a month's calendar.\ndef monthdays2calendar(self, year, month):\n",
+    "body": "        days = list(self.itermonthdays2(year, month))\n        return [ days[i:i+7] for i in range(0, len(days), 7) ]\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "monthdayscalendar",
+    "prompt": "# Return a matrix representing a month's calendar.\ndef monthdayscalendar(self, year, month):\n",
+    "body": "        days = list(self.itermonthdays(year, month))\n        return [ days[i:i+7] for i in range(0, len(days), 7) ]\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "yeardatescalendar",
+    "prompt": "# Return the data for the specified year ready for formatti...\ndef yeardatescalendar(self, year, width):\n",
+    "body": "        months = [self.monthdatescalendar(year, m) for m in Month]\n        return [months[i:i+width] for i in range(0, len(months), width) ]\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "yeardays2calendar",
+    "prompt": "# Return the data for the specified year ready for formatti...\ndef yeardays2calendar(self, year, width):\n",
+    "body": "        months = [self.monthdays2calendar(year, m) for m in Month]\n        return [months[i:i+width] for i in range(0, len(months), width) ]\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "yeardayscalendar",
+    "prompt": "# Return the data for the specified year ready for formatti...\ndef yeardayscalendar(self, year, width):\n",
+    "body": "        months = [self.monthdayscalendar(year, m) for m in Month]\n        return [months[i:i+width] for i in range(0, len(months), width) ]\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "prweek",
+    "prompt": "# Print a single week (no newline).\ndef prweek(self, theweek, width):\n",
+    "body": "        print(self.formatweek(theweek, width), end='')\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "formatday",
+    "prompt": "# Returns a formatted day.\ndef formatday(self, day, weekday, width):\n",
+    "body": "        if day == 0:\n            s = ''\n        else:\n            s = '%2i' % day             # right-align single-digit days\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "formatweek",
+    "prompt": "# Returns a single week in a string (no newline).\ndef formatweek(self, theweek, width):\n",
+    "body": "        return ' '.join(self.formatday(d, wd, width) for (d, wd) in theweek)\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "formatweekday",
+    "prompt": "# Returns a formatted week day name.\ndef formatweekday(self, day, width):\n",
+    "body": "        if width >= 9:\n            names = day_name\n        else:\n            names = day_abbr\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "formatweekheader",
+    "prompt": "# Return a header for a week.\ndef formatweekheader(self, width):\n",
+    "body": "        return ' '.join(self.formatweekday(i, width) for i in self.iterweekdays())\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "prmonth",
+    "prompt": "# Print a month's calendar.\ndef prmonth(self, theyear, themonth, w, l):\n",
+    "body": "        print(self.formatmonth(theyear, themonth, w, l), end='')\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "formatmonth",
+    "prompt": "# Return a month's calendar string (multi-line).\ndef formatmonth(self, theyear, themonth, w, l):\n",
+    "body": "        w = max(2, w)\n        l = max(1, l)\n        s = self.formatmonthname(theyear, themonth, 7 * (w + 1) - 1)\n        s = s.rstrip()\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "formatyear",
+    "prompt": "# Returns a year's calendar as a multi-line string.\ndef formatyear(self, theyear, w, l, c, m):\n",
+    "body": "        w = max(2, w)\n        l = max(1, l)\n        c = max(2, c)\n        colwidth = (w + 1) * 7 - 1\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "pryear",
+    "prompt": "# Print a year's calendar.\ndef pryear(self, theyear, w, l, c, m):\n",
+    "body": "        print(self.formatyear(theyear, w, l, c, m), end='')\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "formatweek",
+    "prompt": "# Return a complete week as a table row.\ndef formatweek(self, theweek):\n",
+    "body": "        s = ''.join(self.formatday(d, wd) for (d, wd) in theweek)\n        return '<tr>%s</tr>' % s\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "formatweekday",
+    "prompt": "# Return a weekday name as a table header.\ndef formatweekday(self, day):\n",
+    "body": "        return '<th class=\"%s\">%s</th>' % (\n            self.cssclasses_weekday_head[day], day_abbr[day])\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "formatweekheader",
+    "prompt": "# Return a header for a week as a table row.\ndef formatweekheader(self):\n",
+    "body": "        s = ''.join(self.formatweekday(i) for i in self.iterweekdays())\n        return '<tr>%s</tr>' % s\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "formatmonth",
+    "prompt": "# Return a formatted month as a table.\ndef formatmonth(self, theyear, themonth, withyear):\n",
+    "body": "        v = []\n        a = v.append\n        a('<table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" class=\"%s\">' % (\n            self.cssclass_month))\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "formatyearpage",
+    "prompt": "# Return a formatted year as a complete HTML page.\ndef formatyearpage(self, theyear, width, css, encoding):\n",
+    "body": "        if encoding is None:\n            encoding = sys.getdefaultencoding()\n        v = []\n        a = v.append\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "formatweekday",
+    "prompt": "# Function formatweekday\ndef formatweekday(self, day, width):\n",
+    "body": "        with different_locale(self.locale):\n            return super().formatweekday(day, width)\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "formatmonthname",
+    "prompt": "# Function formatmonthname\ndef formatmonthname(self, theyear, themonth, width, withyear):\n",
+    "body": "        with different_locale(self.locale):\n            return super().formatmonthname(theyear, themonth, width, withyear)\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "formatweekday",
+    "prompt": "# Function formatweekday\ndef formatweekday(self, day):\n",
+    "body": "        with different_locale(self.locale):\n            return super().formatweekday(day)\n"
+  },
+  {
+    "source": "stdlib:calendar.py",
+    "func_name": "formatmonthname",
+    "prompt": "# Function formatmonthname\ndef formatmonthname(self, theyear, themonth, withyear):\n",
+    "body": "        with different_locale(self.locale):\n            return super().formatmonthname(theyear, themonth, withyear)\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "_calculate_ratio",
+    "prompt": "# Function _calculate_ratio\ndef _calculate_ratio(matches, length):\n",
+    "body": "    if length:\n        return 2.0 * matches / length\n    return 1.0\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "get_close_matches",
+    "prompt": "# Use SequenceMatcher to return list of the best \"good enou...\ndef get_close_matches(word, possibilities, n, cutoff):\n",
+    "body": "    if not n >  0:\n        raise ValueError(\"n must be > 0: %r\" % (n,))\n    if not 0.0 <= cutoff <= 1.0:\n        raise ValueError(\"cutoff must be in [0.0, 1.0]: %r\" % (cutoff,))\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "_keep_original_ws",
+    "prompt": "# Replace whitespace with the original whitespace character...\ndef _keep_original_ws(s, tag_s):\n",
+    "body": "    return ''.join(\n        c if tag_c == \" \" and c.isspace() else tag_c\n        for c, tag_c in zip(s, tag_s)\n    )\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "IS_LINE_JUNK",
+    "prompt": "# Return True for ignorable line: iff `line` is blank or co...\ndef IS_LINE_JUNK(line, pat):\n",
+    "body": "    return pat(line) is not None\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "IS_CHARACTER_JUNK",
+    "prompt": "# Return True for ignorable character: iff `ch` is a space ...\ndef IS_CHARACTER_JUNK(ch, ws):\n",
+    "body": "    return ch in ws\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "_format_range_unified",
+    "prompt": "# Convert range to the \"ed\" format\ndef _format_range_unified(start, stop):\n",
+    "body": "    beginning = start + 1     # lines start numbering with one\n    length = stop - start\n    if length == 1:\n        return '{}'.format(beginning)\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "_format_range_context",
+    "prompt": "# Convert range to the \"ed\" format\ndef _format_range_context(start, stop):\n",
+    "body": "    beginning = start + 1     # lines start numbering with one\n    length = stop - start\n    if not length:\n        beginning -= 1        # empty ranges begin at line just before the range\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "ndiff",
+    "prompt": "# Compare `a` and `b` (lists of strings); return a `Differ`...\ndef ndiff(a, b, linejunk, charjunk):\n",
+    "body": "    return Differ(linejunk, charjunk).compare(a, b)\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "_mdiff",
+    "prompt": "# Returns generator yielding marked up from/to side by side...\ndef _mdiff(fromlines, tolines, context, linejunk, charjunk):\n",
+    "body": "    import re\n\n    # regular expression for finding intraline change indices\n    change_re = re.compile(r'(\\++|\\-+|\\^+)')\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "_test",
+    "prompt": "# Function _test\ndef _test():\n",
+    "body": "    import doctest, difflib\n    return doctest.testmod(difflib)\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "set_seqs",
+    "prompt": "# Set the two sequences to be compared.\ndef set_seqs(self, a, b):\n",
+    "body": "        self.set_seq1(a)\n        self.set_seq2(b)\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "set_seq1",
+    "prompt": "# Set the first sequence to be compared.\ndef set_seq1(self, a):\n",
+    "body": "        if a is self.a:\n            return\n        self.a = a\n        self.matching_blocks = self.opcodes = None\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "set_seq2",
+    "prompt": "# Set the second sequence to be compared.\ndef set_seq2(self, b):\n",
+    "body": "        if b is self.b:\n            return\n        self.b = b\n        self.matching_blocks = self.opcodes = None\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "get_matching_blocks",
+    "prompt": "# Return list of triples describing matching subsequences.\ndef get_matching_blocks(self):\n",
+    "body": "        if self.matching_blocks is not None:\n            return self.matching_blocks\n        la, lb = len(self.a), len(self.b)\n\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "get_opcodes",
+    "prompt": "# Return list of 5-tuples describing how to turn a into b.\ndef get_opcodes(self):\n",
+    "body": "        if self.opcodes is not None:\n            return self.opcodes\n        i = j = 0\n        self.opcodes = answer = []\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "get_grouped_opcodes",
+    "prompt": "# Isolate change clusters by eliminating ranges with no cha...\ndef get_grouped_opcodes(self, n):\n",
+    "body": "        codes = self.get_opcodes()\n        if not codes:\n            codes = [(\"equal\", 0, 1, 0, 1)]\n        # Fixup leading and trailing groups if they show no changes.\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "ratio",
+    "prompt": "# Return a measure of the sequences' similarity (float in [...\ndef ratio(self):\n",
+    "body": "        matches = sum(triple[-1] for triple in self.get_matching_blocks())\n        return _calculate_ratio(matches, len(self.a) + len(self.b))\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "quick_ratio",
+    "prompt": "# Return an upper bound on ratio() relatively quickly.\ndef quick_ratio(self):\n",
+    "body": "        if self.fullbcount is None:\n            self.fullbcount = fullbcount = {}\n            for elt in self.b:\n                fullbcount[elt] = fullbcount.get(elt, 0) + 1\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "real_quick_ratio",
+    "prompt": "# Return an upper bound on ratio() very quickly.\ndef real_quick_ratio(self):\n",
+    "body": "        la, lb = len(self.a), len(self.b)\n        # can't have more matches than the number of elements in the\n        # shorter sequence\n        return _calculate_ratio(min(la, lb), la + lb)\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "compare",
+    "prompt": "# Compare two sequences of lines; generate the resulting de...\ndef compare(self, a, b):\n",
+    "body": "        cruncher = SequenceMatcher(self.linejunk, a, b)\n        for tag, alo, ahi, blo, bhi in cruncher.get_opcodes():\n            if tag == 'replace':\n                g = self._fancy_replace(a, alo, ahi, b, blo, bhi)\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "_dump",
+    "prompt": "# Generate comparison results for a same-tagged range.\ndef _dump(self, tag, x, lo, hi):\n",
+    "body": "        for i in range(lo, hi):\n            yield '%s %s' % (tag, x[i])\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "_fancy_replace",
+    "prompt": "# When replacing one block of lines with another, search th...\ndef _fancy_replace(self, a, alo, ahi, b, blo, bhi):\n",
+    "body": "        best_ratio, cutoff = 0.74, 0.75\n        cruncher = SequenceMatcher(self.charjunk)\n        eqi, eqj = None, None   # 1st indices of equal lines (if any)\n\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "_fancy_helper",
+    "prompt": "# Function _fancy_helper\ndef _fancy_helper(self, a, alo, ahi, b, blo, bhi):\n",
+    "body": "        g = []\n        if alo < ahi:\n            if blo < bhi:\n                g = self._fancy_replace(a, alo, ahi, b, blo, bhi)\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "_qformat",
+    "prompt": "# Format \"?\" output and deal with tabs.\ndef _qformat(self, aline, bline, atags, btags):\n",
+    "body": "        atags = _keep_original_ws(aline, atags).rstrip()\n        btags = _keep_original_ws(bline, btags).rstrip()\n\n        yield \"- \" + aline\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "_tab_newline_replace",
+    "prompt": "# Returns from/to line lists with tabs expanded and newline...\ndef _tab_newline_replace(self, fromlines, tolines):\n",
+    "body": "        def expand_tabs(line):\n            # hide real spaces\n            line = line.replace(' ','\\0')\n            # expand tabs into spaces\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "_split_line",
+    "prompt": "# Builds list of text lines by splitting text lines at wrap...\ndef _split_line(self, data_list, line_num, text):\n",
+    "body": "        if not line_num:\n            data_list.append((line_num,text))\n            return\n\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "_line_wrapper",
+    "prompt": "# Returns iterator that splits (wraps) mdiff text lines\ndef _line_wrapper(self, diffs):\n",
+    "body": "        for fromdata,todata,flag in diffs:\n            # check for context separators and pass them through\n            if flag is None:\n                yield fromdata,todata,flag\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "_make_prefix",
+    "prompt": "# Create unique anchor prefixes\ndef _make_prefix(self):\n",
+    "body": "        fromprefix = \"from%d_\" % HtmlDiff._default_prefix\n        toprefix = \"to%d_\" % HtmlDiff._default_prefix\n        HtmlDiff._default_prefix += 1\n        # store prefixes so line format method has access\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "_convert_flags",
+    "prompt": "# Makes list of \"next\" links\ndef _convert_flags(self, fromlist, tolist, flaglist, context, numlines):\n",
+    "body": "        toprefix = self._prefix[1]\n\n        # process change flags, generating middle column of next anchors/links\n        next_id = ['']*len(flaglist)\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "make_table",
+    "prompt": "# Returns HTML table of side by side comparison with change...\ndef make_table(self, fromlines, tolines, fromdesc, todesc, context, numlines):\n",
+    "body": "        self._make_prefix()\n\n        # change tabs to spaces before it gets more difficult after we insert\n        # markup\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "expand_tabs",
+    "prompt": "# Function expand_tabs\ndef expand_tabs(line):\n",
+    "body": "            line = line.replace(' ','\\0')\n            # expand tabs into spaces\n            line = line.expandtabs(self._tabsize)\n            # replace spaces from expanded tabs back into tab characters\n"
+  },
+  {
+    "source": "stdlib:difflib.py",
+    "func_name": "record_sub_info",
+    "prompt": "# Function record_sub_info\ndef record_sub_info(match_object, sub_info):\n",
+    "body": "                sub_info.append([match_object.group(1)[0],match_object.span()])\n                return match_object.group(1)\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "lt",
+    "prompt": "# Same as a < b.\ndef lt(a, b):\n",
+    "body": "    return a < b\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "le",
+    "prompt": "# Same as a <= b.\ndef le(a, b):\n",
+    "body": "    return a <= b\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "eq",
+    "prompt": "# Same as a == b.\ndef eq(a, b):\n",
+    "body": "    return a == b\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "ne",
+    "prompt": "# Same as a != b.\ndef ne(a, b):\n",
+    "body": "    return a != b\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "ge",
+    "prompt": "# Same as a >= b.\ndef ge(a, b):\n",
+    "body": "    return a >= b\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "gt",
+    "prompt": "# Same as a > b.\ndef gt(a, b):\n",
+    "body": "    return a > b\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "not_",
+    "prompt": "# Same as not a.\ndef not_(a):\n",
+    "body": "    return not a\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "truth",
+    "prompt": "# Return True if a is true, False otherwise.\ndef truth(a):\n",
+    "body": "    return True if a else False\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "is_",
+    "prompt": "# Same as a is b.\ndef is_(a, b):\n",
+    "body": "    return a is b\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "is_not",
+    "prompt": "# Same as a is not b.\ndef is_not(a, b):\n",
+    "body": "    return a is not b\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "abs",
+    "prompt": "# Same as abs(a).\ndef abs(a):\n",
+    "body": "    return _abs(a)\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "add",
+    "prompt": "# Same as a + b.\ndef add(a, b):\n",
+    "body": "    return a + b\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "and_",
+    "prompt": "# Same as a & b.\ndef and_(a, b):\n",
+    "body": "    return a & b\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "floordiv",
+    "prompt": "# Same as a // b.\ndef floordiv(a, b):\n",
+    "body": "    return a // b\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "index",
+    "prompt": "# Same as a.__index__().\ndef index(a):\n",
+    "body": "    return a.__index__()\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "inv",
+    "prompt": "# Same as ~a.\ndef inv(a):\n",
+    "body": "    return ~a\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "lshift",
+    "prompt": "# Same as a << b.\ndef lshift(a, b):\n",
+    "body": "    return a << b\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "mod",
+    "prompt": "# Same as a % b.\ndef mod(a, b):\n",
+    "body": "    return a % b\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "mul",
+    "prompt": "# Same as a * b.\ndef mul(a, b):\n",
+    "body": "    return a * b\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "matmul",
+    "prompt": "# Same as a @ b.\ndef matmul(a, b):\n",
+    "body": "    return a @ b\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "neg",
+    "prompt": "# Same as -a.\ndef neg(a):\n",
+    "body": "    return -a\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "or_",
+    "prompt": "# Same as a | b.\ndef or_(a, b):\n",
+    "body": "    return a | b\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "pos",
+    "prompt": "# Same as +a.\ndef pos(a):\n",
+    "body": "    return +a\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "pow",
+    "prompt": "# Same as a ** b.\ndef pow(a, b):\n",
+    "body": "    return a ** b\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "rshift",
+    "prompt": "# Same as a >> b.\ndef rshift(a, b):\n",
+    "body": "    return a >> b\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "sub",
+    "prompt": "# Same as a - b.\ndef sub(a, b):\n",
+    "body": "    return a - b\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "truediv",
+    "prompt": "# Same as a / b.\ndef truediv(a, b):\n",
+    "body": "    return a / b\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "xor",
+    "prompt": "# Same as a ^ b.\ndef xor(a, b):\n",
+    "body": "    return a ^ b\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "concat",
+    "prompt": "# Same as a + b, for a and b sequences.\ndef concat(a, b):\n",
+    "body": "    if not hasattr(a, '__getitem__'):\n        msg = \"'%s' object can't be concatenated\" % type(a).__name__\n        raise TypeError(msg)\n    return a + b\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "contains",
+    "prompt": "# Same as b in a (note reversed operands).\ndef contains(a, b):\n",
+    "body": "    return b in a\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "countOf",
+    "prompt": "# Return the number of items in a which are, or which equal...\ndef countOf(a, b):\n",
+    "body": "    count = 0\n    for i in a:\n        if i is b or i == b:\n            count += 1\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "delitem",
+    "prompt": "# Same as del a[b].\ndef delitem(a, b):\n",
+    "body": "    del a[b]\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "getitem",
+    "prompt": "# Same as a[b].\ndef getitem(a, b):\n",
+    "body": "    return a[b]\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "setitem",
+    "prompt": "# Same as a[b] = c.\ndef setitem(a, b, c):\n",
+    "body": "    a[b] = c\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "length_hint",
+    "prompt": "# Return an estimate of the number of items in obj.\ndef length_hint(obj, default):\n",
+    "body": "    if not isinstance(default, int):\n        msg = (\"'%s' object cannot be interpreted as an integer\" %\n               type(default).__name__)\n        raise TypeError(msg)\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "call",
+    "prompt": "# Same as obj(*args, **kwargs).\ndef call():\n",
+    "body": "    return obj(*args, **kwargs)\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "iadd",
+    "prompt": "# Same as a += b.\ndef iadd(a, b):\n",
+    "body": "    a += b\n    return a\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "iand",
+    "prompt": "# Same as a &= b.\ndef iand(a, b):\n",
+    "body": "    a &= b\n    return a\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "iconcat",
+    "prompt": "# Same as a += b, for a and b sequences.\ndef iconcat(a, b):\n",
+    "body": "    if not hasattr(a, '__getitem__'):\n        msg = \"'%s' object can't be concatenated\" % type(a).__name__\n        raise TypeError(msg)\n    a += b\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "ifloordiv",
+    "prompt": "# Same as a //= b.\ndef ifloordiv(a, b):\n",
+    "body": "    a //= b\n    return a\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "ilshift",
+    "prompt": "# Same as a <<= b.\ndef ilshift(a, b):\n",
+    "body": "    a <<= b\n    return a\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "imod",
+    "prompt": "# Same as a %= b.\ndef imod(a, b):\n",
+    "body": "    a %= b\n    return a\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "imul",
+    "prompt": "# Same as a *= b.\ndef imul(a, b):\n",
+    "body": "    a *= b\n    return a\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "imatmul",
+    "prompt": "# Same as a @= b.\ndef imatmul(a, b):\n",
+    "body": "    a @= b\n    return a\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "ior",
+    "prompt": "# Same as a |= b.\ndef ior(a, b):\n",
+    "body": "    a |= b\n    return a\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "ipow",
+    "prompt": "# Same as a **= b.\ndef ipow(a, b):\n",
+    "body": "    a **=b\n    return a\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "irshift",
+    "prompt": "# Same as a >>= b.\ndef irshift(a, b):\n",
+    "body": "    a >>= b\n    return a\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "isub",
+    "prompt": "# Same as a -= b.\ndef isub(a, b):\n",
+    "body": "    a -= b\n    return a\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "itruediv",
+    "prompt": "# Same as a /= b.\ndef itruediv(a, b):\n",
+    "body": "    a /= b\n    return a\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "ixor",
+    "prompt": "# Same as a ^= b.\ndef ixor(a, b):\n",
+    "body": "    a ^= b\n    return a\n"
+  },
+  {
+    "source": "stdlib:operator.py",
+    "func_name": "func",
+    "prompt": "# Function func\ndef func(obj):\n",
+    "body": "                for name in names:\n                    obj = getattr(obj, name)\n                return obj\n"
+  }
+]
