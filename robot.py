@@ -25,33 +25,38 @@ def print_model_tiers():
     tiers = [
         ("Small (Baseline)", NCMConfig.small()),
         ("Medium (Scaled)", NCMConfig.medium()),
-        ("Large (Deep)", NCMConfig.large())
+        ("Large (Deep)", NCMConfig.large()),
+        ("Option B (2.0 Billion Frontier Tier)", NCMConfig.two_billion())
     ]
     
     for name, cfg in tiers:
-        v = CodeVQVAE(
-            vocab_size=260,
-            context_length=cfg.context_length,
-            embed_dim=cfg.embed_dim,
-            levels=cfg.levels,
-            codebook_size=cfg.vq_codebook_size,
-            n_enc_layers=cfg.vq_enc_layers,
-            n_dec_layers=cfg.vq_dec_layers
-        )
-        g = NextConceptGenerator(
-            vqvae=v,
-            prefix_len=cfg.prefix_length,
-            d_model=cfg.embed_dim,
-            n_head=cfg.gen_n_head,
-            n_layer=cfg.gen_n_layer,
-            codebook_size=cfg.vq_codebook_size
-        )
+        with torch.device('meta'):
+            v = CodeVQVAE(
+                vocab_size=260,
+                context_length=cfg.context_length,
+                embed_dim=cfg.embed_dim,
+                levels=cfg.levels,
+                codebook_size=cfg.vq_codebook_size,
+                n_enc_layers=cfg.vq_enc_layers,
+                n_dec_layers=cfg.vq_dec_layers
+            )
+            g = NextConceptGenerator(
+                vqvae=v,
+                prefix_len=cfg.prefix_length,
+                d_model=cfg.embed_dim,
+                n_head=cfg.gen_n_head,
+                n_layer=cfg.gen_n_layer,
+                codebook_size=cfg.vq_codebook_size
+            )
         v_params = get_param_count(v)
         g_params = get_param_count(g)
         tot_params = v_params + g_params
         
         print(f"\n* Tier: {name}")
-        print(f"  - Total Parameters: {tot_params:,} (~{tot_params/1e6:.1f}M)")
+        if tot_params >= 1e9:
+            print(f"  - Total Parameters: {tot_params:,} (~{tot_params/1e9:.2f}B)")
+        else:
+            print(f"  - Total Parameters: {tot_params:,} (~{tot_params/1e6:.1f}M)")
         print(f"  - Concept VQ-VAE  : {v_params:,} params ({cfg.vq_enc_layers} enc / {cfg.vq_dec_layers} dec layers)")
         print(f"  - NCM Generator   : {g_params:,} params ({cfg.gen_n_layer} layers, {cfg.gen_n_head} heads, dim={cfg.embed_dim})")
         print(f"  - Context Scales  : target={cfg.context_length} tokens, prefix={cfg.prefix_length} tokens")

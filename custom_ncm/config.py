@@ -95,3 +95,31 @@ class NCMConfig:
             gen_n_layer=8,
             gen_n_head=8
         )
+
+    @classmethod
+    def two_billion(cls) -> "NCMConfig":
+        """
+        Option B (2.0 Billion Parameters / 2B):
+        Designed specifically for 40 GB RAM and 225 GB SSD.
+        - Context Length: 1,024 tokens (Full multi-function modules & classes)
+        - Prompt Prefix : 256 tokens (Detailed algorithmic instructions & docstrings)
+        - Concept Scales: [8, 64, 256, 1024] tokens
+        - Transformer   : d_model=2048, 22 layers, 16 attention heads
+        - Training RAM  : ~32 GB (Fits comfortably within 40 GB RAM)
+        - Inference RAM : ~4.0 GB (FP16) or ~1.0 GB (INT4)
+        - Disk Space    : ~4.0 GB checkpoint on 225 GB SSD
+        """
+        return cls(
+            context_length=1024,
+            prefix_length=256,
+            levels=[8, 64, 256, 1024],
+            embed_dim=2048,
+            vq_codebook_size=2048,
+            vq_enc_layers=4,
+            vq_dec_layers=4,
+            gen_n_layer=22,
+            gen_n_head=16,
+            batch_size=4,
+            lr_vqvae=3e-4,
+            lr_gen=1.5e-4
+        )
