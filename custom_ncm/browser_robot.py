@@ -250,6 +250,97 @@ class BrowserRobot:
 
         return False
 
+    def extract_table_of_contents(self) -> List[Dict[str, str]]:
+        """
+        Universal Table of Contents (TOC) extractor across ALL documentation sites.
+        Extracts all chapter, section, and sub-page URLs from sidebars, TOC trees, and navigation menus.
+        Compatible with Sphinx, Docusaurus, VitePress, ReadTheDocs, MkDocs, GitBook, and custom docs.
+        """
+        if not self.page:
+            raise RuntimeError("Browser is not open.")
+
+        toc_items = self.page.evaluate("""() => {
+            const results = [];
+            const seenUrls = new Set();
+            const currentHost = window.location.hostname;
+
+            const tocSelectors = [
+                // Docusaurus
+                '.theme-doc-sidebar-menu',
+                '.menu__list',
+                'nav.menu',
+                // Sphinx / ReadTheDocs
+                '.wy-menu',
+                '.toctree-wrapper',
+                '.sphinxsidebar',
+                '.sidebar-drawer',
+                'ul.current',
+                'div.toctree',
+                // VitePress / VuePress
+                '.VPSidebar',
+                '.sidebar-links',
+                // MkDocs / Material
+                '.md-nav',
+                '.md-sidebar--primary',
+                // GitBook
+                'nav[aria-label="Table of contents"]',
+                '[data-testid="page-list"]',
+                // Universal / HTML5 semantic fallbacks
+                'nav.toc',
+                '.table-of-contents',
+                '.tableofcontents',
+                'nav.sidebar',
+                'aside.sidebar',
+                'nav',
+                'aside'
+            ];
+
+            let candidateElements = [];
+            for (const sel of tocSelectors) {
+                const els = document.querySelectorAll(sel);
+                if (els.length > 0) {
+                    els.forEach(el => candidateElements.push(el));
+                }
+            }
+
+            if (candidateElements.length === 0) {
+                candidateElements = [document.body];
+            }
+
+            for (const container of candidateElements) {
+                const links = container.querySelectorAll('a[href]');
+                for (const a of links) {
+                    const text = (a.innerText || a.textContent || '').trim();
+                    let href = a.href;
+                    if (!href) continue;
+
+                    try {
+                        const urlObj = new URL(href, window.location.href);
+                        if (urlObj.hostname !== currentHost) continue;
+                        if (/\\.(zip|tar|gz|pdf|png|jpg|svg|exe)$/i.test(urlObj.pathname)) continue;
+                        
+                        const cleanUrl = urlObj.origin + urlObj.pathname;
+                        if (text.length >= 2 && !seenUrls.has(cleanUrl)) {
+                            seenUrls.add(cleanUrl);
+                            results.push({
+                                title: text.replace(/[\\r\\n]+/g, ' ').trim(),
+                                url: cleanUrl
+                            });
+                        }
+                    } catch (e) {
+                        continue;
+                    }
+                }
+                if (results.length >= 8) {
+                    break;
+                }
+            }
+
+            return results;
+        }""")
+
+        return toc_items
+
     def read_text(self, selector: Optional[str] = None) -> str:
         """
         Reads the FULL visible text from the page, prioritizing the main article/document body,

@@ -70,6 +70,16 @@ def main():
         default=0,
         help="Maximum pages to read in continuous loop (0 = infinite until stopped with Ctrl+C)."
     )
+    parser.add_argument(
+        "--train",
+        action="store_true",
+        help="Train Code Robot live on every webpage as it reads (updates neural weights in real-time)."
+    )
+    parser.add_argument(
+        "--toc",
+        action="store_true",
+        help="Universal TOC Mode: Extract the entire Table of Contents and read/learn every page and sub-page one by one."
+    )
     args = parser.parse_args()
 
     print("=" * 70)
@@ -77,6 +87,13 @@ def main():
     print("=" * 70)
     print(f"[*] Target URL : {args.url}")
     print(f"[*] Window Mode: {'Visible Chrome (Headed)' if args.head else 'Headless Chrome'}")
+    print(f"[*] Live Train : {'ENABLED (Model weights update on each page)' if args.train else 'Disabled (Reading & Scraping only)'}")
+
+    learner = None
+    if args.train:
+        from custom_ncm.online_learner import OnlineCodeLearner
+        print("[*] Initializing Online Neural Learner (Live Training Active)...")
+        learner = OnlineCodeLearner()
 
     current_url = args.url
     page_count = 0
@@ -86,104 +103,199 @@ def main():
 
     with BrowserRobot(headless=not args.head) as bot:
         try:
-            while True:
-                page_count += 1
-                print("\n" + "=" * 70)
-                print(f"  [PAGE #{page_count}] READING: {current_url}")
-                print("=" * 70)
+            # ---------------------------------------------------------
+            # MODE A: UNIVERSAL TABLE OF CONTENTS (TOC) CRAWLER & LEARNER
+            # ---------------------------------------------------------
+            if args.toc:
+                print("\n[*] Navigating to documentation URL to extract Table of Contents...")
+                bot.goto(args.url)
+                toc_items = bot.extract_table_of_contents()
+                print(f"[+] Discovered {len(toc_items)} chapters & sub-pages in Table of Contents:")
+                for idx, item in enumerate(toc_items[:6], 1):
+                    safe_t = item['title'].encode('ascii', errors='replace').decode('ascii')
+                    print(f"    {idx}. {safe_t} -> {item['url']}")
+                if len(toc_items) > 6:
+                    print(f"    ... and {len(toc_items) - 6} more sub-pages in Table of Contents!")
 
-                # 1. Navigation
-                title = bot.goto(current_url)
-                safe_title = title.encode('ascii', errors='replace').decode('ascii')
-                print(f"  [+] Page Title: {safe_title}")
+                # Queue up pages to visit
+                urls_to_visit = [item['url'] for item in toc_items]
+                if args.url not in urls_to_visit:
+                    urls_to_visit.insert(0, args.url)
 
-                # 2. Scrolling
-                print(f"  [*] Scrolling through page content ({args.scroll}px)...")
-                scroll_info = bot.scroll("down", args.scroll)
-                print(f"  [+] Scroll: {scroll_info['scrollY']}px / Total Height: {scroll_info['scrollHeight']}px")
+                for item_idx, visit_url in enumerate(urls_to_visit, 1):
+                    page_count += 1
+                    print("\n" + "=" * 70)
+                    print(f"  [TOC PAGE {item_idx}/{len(urls_to_visit)}] OPENING: {visit_url}")
+                    print("=" * 70)
 
-                # 3. Optional user click on first page
-                if args.click and page_count == 1:
-                    print(f"  [+] Executing initial click: '{args.click}'...")
-                    bot.click(args.click)
-                    time.sleep(0.5)
+                    title = bot.goto(visit_url)
+                    safe_title = title.encode('ascii', errors='replace').decode('ascii')
+                    print(f"  [+] Page Title: {safe_title}")
 
-                # 4. Reading the ENTIRE Page Text
-                print(f"  [*] Extracting FULL text from page...")
-                text = bot.read_text()
-                paragraphs = bot.read_paragraphs()
-                words = len(text.split())
-                code_blocks = bot.read_code_blocks()
+                    # Scroll through page
+                    print(f"  [*] Scrolling through content ({args.scroll}px)...")
+                    scroll_info = bot.scroll("down", args.scroll)
+                    print(f"  [+] Scroll: {scroll_info['scrollY']}px / Total: {scroll_info['scrollHeight']}px")
 
-                total_characters += len(text)
-                total_words += words
-                total_code_blocks += len(code_blocks)
+                    # Read full text, paragraphs, code blocks
+                    text = bot.read_text()
+                    paragraphs = bot.read_paragraphs()
+                    words = len(text.split())
+                    code_blocks = bot.read_code_blocks()
 
-                print(f"  [+] Extracted: {len(text):,} chars | {words:,} words | {len(paragraphs)} paragraphs | {len(code_blocks)} code blocks")
+                    total_characters += len(text)
+                    total_words += words
+                    total_code_blocks += len(code_blocks)
 
-                if paragraphs:
-                    p0 = paragraphs[0].encode('ascii', errors='replace').decode('ascii')
-                    print(f"  [+] First Paragraph: \"{p0[:200]}...\"")
+                    print(f"  [+] Extracted: {len(text):,} chars | {words:,} words | {len(paragraphs)} paragraphs | {len(code_blocks)} code blocks")
 
-                # 5. Understanding: Code Blocks & Outline
-                if code_blocks:
-                    first = code_blocks[0]
-                    ctx = first['context'].encode('ascii', errors='replace').decode('ascii')
-                    snippet = first['code'][:180].encode('ascii', errors='replace').decode('ascii')
-                    print(f"  [+] Sample Code Block (Context: {ctx or 'General'}):")
-                    print(f"```python\n{snippet}\n```")
+                    # Live Neural Training
+                    if learner and code_blocks:
+                        print(f"  [+] [Live Neural Training] Ingesting {len(code_blocks)} code snippets into model weights...")
+                        train_res = learner.train_on_page(
+                            title=title,
+                            code_blocks=code_blocks,
+                            text_paragraphs=paragraphs
+                        )
+                        if train_res['loss'] is not None:
+                            print(f"  [+] Training Loss: {train_res['loss']:.4f} | Weights Updated -> {train_res['checkpoint']}")
 
-                understanding = bot.understand_page()
-                if understanding['headings']:
-                    print(f"  [+] Page Sections:")
-                    for h in understanding['headings'][:5]:
-                        indent = "  " * h['level']
-                        h_text = h['text'].encode('ascii', errors='replace').decode('ascii')
-                        print(f"    {indent}* {h_text}")
+                    # Save to corpus
+                    if args.save:
+                        mode = 'w' if page_count == 1 else 'a'
+                        with open(args.save, mode, encoding='utf-8') as f:
+                            f.write(f"\n{'='*70}\n")
+                            f.write(f"TOC PAGE #{page_count}: {title}\nURL: {visit_url}\n")
+                            f.write(f"Stats: {len(text):,} chars, {words:,} words, {len(code_blocks)} code blocks\n")
+                            f.write(f"{'-'*70}\n\n")
+                            f.write(text)
+                            f.write("\n\n--- CODE BLOCKS ---\n\n")
+                            for cb in code_blocks:
+                                f.write(f"### {cb['context']}\n{cb['code']}\n\n")
+                        print(f"  [+] Saved to corpus: {args.save}")
 
-                # Save / Append page to output file
-                if args.save:
-                    mode = 'w' if page_count == 1 else 'a'
-                    with open(args.save, mode, encoding='utf-8') as f:
-                        f.write(f"\n{'='*70}\n")
-                        f.write(f"PAGE #{page_count}: {title}\nURL: {current_url}\n")
-                        f.write(f"Stats: {len(text):,} chars, {words:,} words, {len(code_blocks)} code blocks\n")
-                        f.write(f"{'-'*70}\n\n")
-                        f.write(text)
-                        f.write("\n\n--- CODE BLOCKS ---\n\n")
-                        for cb in code_blocks:
-                            f.write(f"### {cb['context']}\n{cb['code']}\n\n")
-                    print(f"  [+] Content appended to: {args.save}")
+                    if args.full:
+                        print("\n" + text.encode('ascii', errors='replace').decode('ascii'))
 
-                if args.full:
-                    print("\n" + text.encode('ascii', errors='replace').decode('ascii'))
+                    if args.max_pages > 0 and page_count >= args.max_pages:
+                        print(f"\n[+] Reached requested max page limit ({args.max_pages}). Done!")
+                        break
 
-                if args.screenshot:
-                    ss_path = f"page_{page_count}_{args.screenshot}" if page_count > 1 else args.screenshot
-                    bot.screenshot(ss_path)
-                    print(f"  [+] Screenshot saved to: {ss_path}")
+                    time.sleep(args.delay)
 
-                # Single page check
-                if not args.next:
-                    print("\n[i] Note: Run with --next to continuously auto-click 'Next' and read subsequent pages until stopped.")
-                    break
+            # ---------------------------------------------------------
+            # MODE B: CONTINUOUS 'NEXT >' BUTTON TRAVERSAL
+            # ---------------------------------------------------------
+            else:
+                while True:
+                    page_count += 1
+                    print("\n" + "=" * 70)
+                    print(f"  [PAGE #{page_count}] READING: {current_url}")
+                    print("=" * 70)
 
-                # Max pages limit check
-                if args.max_pages > 0 and page_count >= args.max_pages:
-                    print(f"\n[+] Reached requested max page limit ({args.max_pages}). Done!")
-                    break
+                    # 1. Navigation
+                    title = bot.goto(current_url)
+                    safe_title = title.encode('ascii', errors='replace').decode('ascii')
+                    print(f"  [+] Page Title: {safe_title}")
 
-                # Continuous mode: Click Next button at bottom of page!
-                print(f"\n[*] Reached end of Page #{page_count}. Looking for 'Next' button...")
-                time.sleep(args.delay)
+                    # 2. Scrolling
+                    print(f"  [*] Scrolling through page content ({args.scroll}px)...")
+                    scroll_info = bot.scroll("down", args.scroll)
+                    print(f"  [+] Scroll: {scroll_info['scrollY']}px / Total Height: {scroll_info['scrollHeight']}px")
 
-                has_next = bot.click_next_page()
-                if not has_next:
-                    print(f"\n[!] No 'Next' button found on page (end of documentation reached).")
-                    break
+                    # 3. Optional user click on first page
+                    if args.click and page_count == 1:
+                        print(f"  [+] Executing initial click: '{args.click}'...")
+                        bot.click(args.click)
+                        time.sleep(0.5)
 
-                current_url = bot.page.url
-                print(f"  [>>>] 'Next' clicked successfully! Transitioning to: {current_url}")
+                    # 4. Reading the ENTIRE Page Text
+                    print(f"  [*] Extracting FULL text from page...")
+                    text = bot.read_text()
+                    paragraphs = bot.read_paragraphs()
+                    words = len(text.split())
+                    code_blocks = bot.read_code_blocks()
+
+                    total_characters += len(text)
+                    total_words += words
+                    total_code_blocks += len(code_blocks)
+
+                    print(f"  [+] Extracted: {len(text):,} chars | {words:,} words | {len(paragraphs)} paragraphs | {len(code_blocks)} code blocks")
+
+                    if paragraphs:
+                        p0 = paragraphs[0].encode('ascii', errors='replace').decode('ascii')
+                        print(f"  [+] First Paragraph: \"{p0[:200]}...\"")
+
+                    # 5. Understanding: Code Blocks & Outline
+                    if code_blocks:
+                        first = code_blocks[0]
+                        ctx = first['context'].encode('ascii', errors='replace').decode('ascii')
+                        snippet = first['code'][:180].encode('ascii', errors='replace').decode('ascii')
+                        print(f"  [+] Sample Code Block (Context: {ctx or 'General'}):")
+                        print(f"```python\n{snippet}\n```")
+
+                    understanding = bot.understand_page()
+                    if understanding['headings']:
+                        print(f"  [+] Page Sections:")
+                        for h in understanding['headings'][:5]:
+                            indent = "  " * h['level']
+                            h_text = h['text'].encode('ascii', errors='replace').decode('ascii')
+                            print(f"    {indent}* {h_text}")
+
+                    # 6. Live Neural Training on Page Content
+                    if learner and code_blocks:
+                        print(f"  [+] [Live Neural Training] Ingesting {len(code_blocks)} code snippets into model weights...")
+                        train_res = learner.train_on_page(
+                            title=title,
+                            code_blocks=code_blocks,
+                            text_paragraphs=paragraphs
+                        )
+                        if train_res['loss'] is not None:
+                            print(f"  [+] Training Loss: {train_res['loss']:.4f} | Weights Updated -> {train_res['checkpoint']}")
+
+                    # Save / Append page to output file
+                    if args.save:
+                        mode = 'w' if page_count == 1 else 'a'
+                        with open(args.save, mode, encoding='utf-8') as f:
+                            f.write(f"\n{'='*70}\n")
+                            f.write(f"PAGE #{page_count}: {title}\nURL: {current_url}\n")
+                            f.write(f"Stats: {len(text):,} chars, {words:,} words, {len(code_blocks)} code blocks\n")
+                            f.write(f"{'-'*70}\n\n")
+                            f.write(text)
+                            f.write("\n\n--- CODE BLOCKS ---\n\n")
+                            for cb in code_blocks:
+                                f.write(f"### {cb['context']}\n{cb['code']}\n\n")
+                        print(f"  [+] Content appended to: {args.save}")
+
+                    if args.full:
+                        print("\n" + text.encode('ascii', errors='replace').decode('ascii'))
+
+                    if args.screenshot:
+                        ss_path = f"page_{page_count}_{args.screenshot}" if page_count > 1 else args.screenshot
+                        bot.screenshot(ss_path)
+                        print(f"  [+] Screenshot saved to: {ss_path}")
+
+                    # Single page check
+                    if not args.next:
+                        print("\n[i] Note: Run with --next (or --toc) to continuously auto-read subsequent pages until stopped.")
+                        break
+
+                    # Max pages limit check
+                    if args.max_pages > 0 and page_count >= args.max_pages:
+                        print(f"\n[+] Reached requested max page limit ({args.max_pages}). Done!")
+                        break
+
+                    # Continuous mode: Click Next button at bottom of page!
+                    print(f"\n[*] Reached end of Page #{page_count}. Looking for 'Next' button...")
+                    time.sleep(args.delay)
+
+                    has_next = bot.click_next_page()
+                    if not has_next:
+                        print(f"\n[!] No 'Next' button found on page (end of documentation reached).")
+                        break
+
+                    current_url = bot.page.url
+                    print(f"  [>>>] 'Next' clicked successfully! Transitioning to: {current_url}")
 
         except KeyboardInterrupt:
             print("\n\n" + "!" * 70)
