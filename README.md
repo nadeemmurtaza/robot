@@ -1,5 +1,7 @@
 # 🤖 Code Robot: Next-Concept Modeling (NCM) & Hybrid Consistency Model (HC-NCM)
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/nadeemmurtaza/robot/blob/main/robot_colab.ipynb)
+
 A state-of-the-art neural code generator designed for **parallel, coarse-to-fine hierarchical code synthesis** with **sub-120ms latency**.
 
 Inspired by Stanford Hazy Research ([arXiv:2610.14162](https://arxiv.org/abs/2610.14162)), Latent Consistency Models (LCM), and bidirectional diffusion backbones (Diffusion Gemma).
