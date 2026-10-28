@@ -374,9 +374,10 @@ class BrowserRobot:
                     if (!['http:', 'https:'].includes(u.protocol)) continue;
                     
                     // Comprehensive asset, download, and archive blacklist
-                    if (/\\.(zip|tar|gz|bz2|xz|pdf|png|jpg|jpeg|gif|svg|ico|exe|whl|css|js|map|wasm|epub|tgz|7z|rar|dmg|pkg|deb|rpm|msi|iso)$/i.test(u.pathname)) continue;
-                    if (/\\/(archives|downloads)\\/i.test(u.pathname)) continue;
-                    if (/download\\.html$/i.test(u.pathname)) continue;
+                    const pLower = u.pathname.toLowerCase();
+                    const blacklistExts = ['.zip', '.tar', '.gz', '.bz2', '.xz', '.pdf', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.exe', '.whl', '.css', '.js', '.map', '.wasm', '.epub', '.tgz', '.7z', '.rar', '.dmg', '.pkg', '.deb', '.rpm', '.msi', '.iso'];
+                    if (blacklistExts.some(ext => pLower.endsWith(ext))) continue;
+                    if (pLower.includes('/archives/') || pLower.includes('/downloads/') || pLower.endsWith('download.html')) continue;
                     
                     const isThirdParty = (u.hostname !== currentHost);
                     if (!includeThirdParty && isThirdParty) continue;
