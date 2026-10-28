@@ -119,6 +119,20 @@ with BrowserRobot(headless=True) as bot:
 
 ---
 
+### 6. Full-Site Spider, Master Manifest & Live Neural Training
+Traverses ANY documentation website, collects all pages, sub-pages, menus, sub-menus, and third-party links, compiles `crawl_manifest.json`, and systematically trains Code Robot live:
+
+```bash
+# Universal Full-Site Spider + Live Neural Training
+python browse.py "https://docs.python.org/3/" --spider --train
+
+# Or for ANY documentation website
+python browse.py "https://fastapi.tiangolo.com/" --spider --train
+python browse.py "https://react.dev/" --spider --train
+```
+
+---
+
 ## 🏃 Run the Self-Contained Test
 
 To verify browser navigation, scrolling, clicking, reading, and understanding immediately:

@@ -72,13 +72,23 @@ class BrowserRobot:
                 pass
             self.playwright = None
 
-    def goto(self, url: str) -> str:
-        """Navigates to URL and waits for DOM content to load."""
+    def goto(self, url: str, timeout: int = 15000) -> str:
+        """Navigates to URL with resilient fallback for slow third-party sites."""
         if not self.page:
             self.start()
-        self.page.goto(url, wait_until="domcontentloaded")
+        try:
+            self.page.goto(url, wait_until="domcontentloaded", timeout=timeout)
+        except Exception:
+            try:
+                # If domcontentloaded timed out (e.g. slow external tracker/analytics), fallback to commit
+                self.page.goto(url, wait_until="commit", timeout=5000)
+            except Exception:
+                pass
         time.sleep(0.5)
-        return self.page.title()
+        try:
+            return self.page.title()
+        except Exception:
+            return url
 
     def scroll(self, direction: str = "down", pixels: int = 600) -> Dict[str, Any]:
         """
@@ -340,6 +350,218 @@ class BrowserRobot:
         }""")
 
         return toc_items
+
+    def extract_all_links(self, include_third_party: bool = True) -> List[Dict[str, Any]]:
+        """
+        Extracts ALL links across the entire page (menus, sidebars, submenus,
+        dropdowns, table of contents, article body, in-text citations, and footer).
+        Includes third-party and external links when include_third_party=True.
+        Filters out fragments, mailto/javascript, and binary/asset files.
+        Works across ANY website and documentation framework.
+        """
+        if not self.page:
+            raise RuntimeError("Browser is not open.")
+
+        return self.page.evaluate("""(includeThirdParty) => {
+            const links = [];
+            const seen = new Set();
+            const currentHost = window.location.hostname;
+            const allAnchors = document.querySelectorAll('a[href]');
+
+            for (const a of allAnchors) {
+                try {
+                    const u = new URL(a.href, window.location.href);
+                    if (!['http:', 'https:'].includes(u.protocol)) continue;
+                    if (/\\.(zip|tar|gz|bz2|xz|pdf|png|jpg|jpeg|gif|svg|ico|exe|whl|css|js|map|wasm)$/i.test(u.pathname)) continue;
+                    
+                    const isThirdParty = (u.hostname !== currentHost);
+                    if (!includeThirdParty && isThirdParty) continue;
+
+                    const cleanUrl = u.origin + u.pathname;
+                    if (seen.has(cleanUrl)) continue;
+                    seen.add(cleanUrl);
+
+                    let title = (a.innerText || a.textContent || a.getAttribute('title') || a.getAttribute('aria-label') || '').trim();
+                    title = title.replace(/\\s+/g, ' ');
+                    if (!title) {
+                        const segs = u.pathname.split('/').filter(Boolean);
+                        title = segs.length > 0 ? segs[segs.length - 1] : (u.hostname || 'Page');
+                    }
+
+                    links.push({
+                        title: title,
+                        url: cleanUrl,
+                        domain: u.hostname,
+                        is_third_party: isThirdParty
+                    });
+                } catch (e) {
+                    continue;
+                }
+            }
+            return links;
+        }""", include_third_party)
+
+    def collect_full_site_manifest(
+        self,
+        start_url: str,
+        max_pages: int = 0,
+        max_discovery_depth: int = 3,
+        include_third_party: bool = True,
+        manifest_file: str = "crawl_manifest.json"
+    ) -> List[Dict[str, Any]]:
+        """
+        Full Site Crawler: Systematically traverses ANY website to collect:
+        - All pages
+        - All sub-pages
+        - Every link
+        - Every menu and sub-menu
+        - Third-party and external documentation links
+        Generates and saves a master crawl manifest JSON file.
+        """
+        import urllib.parse
+        import posixpath
+        import json
+
+        parsed_start = urllib.parse.urlparse(start_url)
+        base_host = parsed_start.netloc
+
+        # Determine path scope (e.g. "/3/" for docs.python.org/3/)
+        p = parsed_start.path
+        if p.endswith('.html') or p.endswith('.htm'):
+            prefix = posixpath.dirname(p)
+            if not prefix.endswith('/'):
+                prefix += '/'
+        else:
+            prefix = p if p.endswith('/') else p + '/'
+
+        clean_start = urllib.parse.urljoin(start_url, parsed_start.path)
+        print(f"[*] Starting Full-Site Spider on: {clean_start}")
+        print(f"[*] Scope: Host = {base_host} | Path Prefix = {prefix} | Include Third Party = {include_third_party}")
+
+        internal_entries: List[Dict[str, Any]] = []
+        third_party_entries: List[Dict[str, Any]] = []
+        seen_urls = set()
+        queue = [{"url": clean_start, "depth": 0, "title": "Start Page"}]
+        visited_pages = set()
+
+        seen_urls.add(clean_start)
+        internal_entries.append({
+            "title": "Start Page",
+            "url": clean_start,
+            "domain": base_host,
+            "type": "internal",
+            "status": "pending"
+        })
+
+        discovery_limit = 1000 if max_pages == 0 else max(max_pages * 3, 50)
+        discovery_count = 0
+
+        while queue:
+            current = queue.pop(0)
+            cur_url = current["url"]
+            cur_depth = current["depth"]
+
+            if cur_url in visited_pages:
+                continue
+            visited_pages.add(cur_url)
+            discovery_count += 1
+
+            try:
+                page_title = self.goto(cur_url)
+                # Update title in internal entries
+                for m in internal_entries:
+                    if m["url"] == cur_url:
+                        m["title"] = page_title.strip() or m["title"]
+                        break
+
+                safe_t = page_title.encode('ascii', errors='replace').decode('ascii')
+                total_found = len(internal_entries) + len(third_party_entries)
+                print(f"  [Spider #{discovery_count}] ({len(internal_entries)} internal, {len(third_party_entries)} external links) -> {safe_t}")
+
+                links = self.extract_all_links(include_third_party=include_third_party)
+                for item in links:
+                    l_url = item["url"]
+                    l_title = item["title"]
+                    is_tp = item.get("is_third_party", False)
+                    l_domain = item.get("domain", "")
+
+                    if not is_tp:
+                        # Internal link filter: must match path prefix
+                        l_parsed = urllib.parse.urlparse(l_url)
+                        if not l_parsed.path.startswith(prefix):
+                            continue
+
+                    if l_url not in seen_urls:
+                        seen_urls.add(l_url)
+                        entry = {
+                            "title": l_title,
+                            "url": l_url,
+                            "domain": l_domain,
+                            "type": "third_party" if is_tp else "internal",
+                            "status": "pending"
+                        }
+
+                        if is_tp:
+                            third_party_entries.append(entry)
+                        else:
+                            internal_entries.append(entry)
+                            # Queue internal pages for deeper link discovery
+                            if cur_depth + 1 < max_discovery_depth and len(internal_entries) < discovery_limit:
+                                queue.append({
+                                    "url": l_url,
+                                    "depth": cur_depth + 1,
+                                    "title": l_title
+                                })
+
+                # Save intermediate manifest
+                combined = []
+                for idx, item in enumerate(internal_entries + third_party_entries, 1):
+                    item_copy = dict(item)
+                    item_copy["index"] = idx
+                    combined.append(item_copy)
+
+                with open(manifest_file, "w", encoding="utf-8") as f:
+                    json.dump({
+                        "start_url": clean_start,
+                        "base_host": base_host,
+                        "path_prefix": prefix,
+                        "include_third_party": include_third_party,
+                        "total_pages": len(combined),
+                        "internal_count": len(internal_entries),
+                        "third_party_count": len(third_party_entries),
+                        "pages": combined
+                    }, f, indent=2)
+
+                if (len(internal_entries) + len(third_party_entries)) >= discovery_limit:
+                    break
+
+            except Exception as e:
+                print(f"  [!] Notice during spidering of {cur_url}: {e}")
+                continue
+
+        # Build final unified manifest: internal chapters & pages first, followed by third-party links
+        final_manifest: List[Dict[str, Any]] = []
+        for idx, item in enumerate(internal_entries + third_party_entries, 1):
+            item["index"] = idx
+            final_manifest.append(item)
+
+        with open(manifest_file, "w", encoding="utf-8") as f:
+            json.dump({
+                "start_url": clean_start,
+                "base_host": base_host,
+                "path_prefix": prefix,
+                "include_third_party": include_third_party,
+                "total_pages": len(final_manifest),
+                "internal_count": len(internal_entries),
+                "third_party_count": len(third_party_entries),
+                "pages": final_manifest
+            }, f, indent=2)
+
+        print(f"\n[+] Master Crawl Manifest saved: {len(final_manifest)} total pages discovered across site!")
+        print(f"    - Internal documentation pages : {len(internal_entries)}")
+        print(f"    - Third-party & external links  : {len(third_party_entries)}")
+        print(f"[+] Manifest file: {manifest_file}")
+        return final_manifest
 
     def read_text(self, selector: Optional[str] = None) -> str:
         """
