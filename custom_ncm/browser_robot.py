@@ -372,7 +372,11 @@ class BrowserRobot:
                 try {
                     const u = new URL(a.href, window.location.href);
                     if (!['http:', 'https:'].includes(u.protocol)) continue;
-                    if (/\\.(zip|tar|gz|bz2|xz|pdf|png|jpg|jpeg|gif|svg|ico|exe|whl|css|js|map|wasm)$/i.test(u.pathname)) continue;
+                    
+                    // Comprehensive asset, download, and archive blacklist
+                    if (/\\.(zip|tar|gz|bz2|xz|pdf|png|jpg|jpeg|gif|svg|ico|exe|whl|css|js|map|wasm|epub|tgz|7z|rar|dmg|pkg|deb|rpm|msi|iso)$/i.test(u.pathname)) continue;
+                    if (/\\/(archives|downloads)\\/i.test(u.pathname)) continue;
+                    if (/download\\.html$/i.test(u.pathname)) continue;
                     
                     const isThirdParty = (u.hostname !== currentHost);
                     if (!includeThirdParty && isThirdParty) continue;
@@ -453,10 +457,15 @@ class BrowserRobot:
             "status": "pending"
         })
 
+        max_discovery_visits = 15 if max_pages == 0 else min(15, max(max_pages, 5))
         discovery_limit = 1000 if max_pages == 0 else max(max_pages * 3, 50)
         discovery_count = 0
 
         while queue:
+            if discovery_count >= max_discovery_visits:
+                print(f"[*] Comprehensive discovery complete: visited {discovery_count} sections and mapped {len(internal_entries)} internal pages + {len(third_party_entries)} external links.")
+                break
+
             current = queue.pop(0)
             cur_url = current["url"]
             cur_depth = current["depth"]
@@ -474,9 +483,11 @@ class BrowserRobot:
                         m["title"] = page_title.strip() or m["title"]
                         break
 
-                safe_t = page_title.encode('ascii', errors='replace').decode('ascii')
+                safe_t = page_title.strip().encode('ascii', errors='replace').decode('ascii')
+                if not safe_t:
+                    safe_t = cur_url
                 total_found = len(internal_entries) + len(third_party_entries)
-                print(f"  [Spider #{discovery_count}] ({len(internal_entries)} internal, {len(third_party_entries)} external links) -> {safe_t}")
+                print(f"  [Spider #{discovery_count}/{max_discovery_visits}] ({len(internal_entries)} internal, {len(third_party_entries)} external links) -> {safe_t}")
 
                 links = self.extract_all_links(include_third_party=include_third_party)
                 for item in links:
