@@ -134,5 +134,19 @@ robot/
 
 ---
 
+## 🧠 Agent Skills for Teaching & Training
+
+Code Robot comes equipped with modular workspace skills in .agents/skills/ to automate teaching, training, and TPU scaling:
+
+| Skill | Path | Description |
+| :--- | :--- | :--- |
+| **	each-robot-curriculum** | .agents/skills/teach-robot-curriculum/ | Mentors Code Robot through Stage 1 Nursery & the 10-chapter progressive curriculum. |
+| **	rain-code-robot** | .agents/skills/train-code-robot/ | Complete training workflows for VQ-VAE, NCM Generator, and autonomous self-play. |
+| **	pu-v5e-scaling** | .agents/skills/tpu-v5e-scaling/ | Scales architecture to 2.04B params & 1M context on Google Cloud TPU v5e-1 (float16). |
+| **hybrid-consistency-pipeline** | .agents/skills/hybrid-consistency-pipeline/ | Manages 1-step LCM consistency, Diffusion Gemma backbone, and AST validation. |
+| **python-corpus-harvester** | .agents/skills/python-corpus-harvester/ | Scrapes and validates functions across 419 stdlib modules & docs.python.org. |
+
+---
+
 ## 📜 License
 MIT License.
