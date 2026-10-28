@@ -409,12 +409,12 @@ class BrowserRobot:
         self,
         start_url: str,
         max_pages: int = 0,
-        max_discovery_depth: int = 3,
+        max_discovery_depth: int = 0,
         include_third_party: bool = True,
         manifest_file: str = "crawl_manifest.json"
     ) -> List[Dict[str, Any]]:
         """
-        Full Site Crawler: Systematically traverses ANY website to collect:
+        Full Site Crawler: Systematically traverses ANY website without limits to collect:
         - All pages
         - All sub-pages
         - Every link
@@ -439,8 +439,9 @@ class BrowserRobot:
             prefix = p if p.endswith('/') else p + '/'
 
         clean_start = urllib.parse.urljoin(start_url, parsed_start.path)
-        print(f"[*] Starting Full-Site Spider on: {clean_start}")
+        print(f"[*] Starting Unlimited Full-Site Spider on: {clean_start}")
         print(f"[*] Scope: Host = {base_host} | Path Prefix = {prefix} | Include Third Party = {include_third_party}")
+        print(f"[*] Limits: NONE (Unlimited crawling across all pages, sub-pages, and sections)")
 
         internal_entries: List[Dict[str, Any]] = []
         third_party_entries: List[Dict[str, Any]] = []
@@ -457,15 +458,11 @@ class BrowserRobot:
             "status": "pending"
         })
 
-        max_discovery_visits = 15 if max_pages == 0 else min(15, max(max_pages, 5))
-        discovery_limit = 1000 if max_pages == 0 else max(max_pages * 3, 50)
+        # No page or section limits if max_pages == 0
+        limit_pages = float('inf') if max_pages == 0 else max_pages
         discovery_count = 0
 
         while queue:
-            if discovery_count >= max_discovery_visits:
-                print(f"[*] Comprehensive discovery complete: visited {discovery_count} sections and mapped {len(internal_entries)} internal pages + {len(third_party_entries)} external links.")
-                break
-
             current = queue.pop(0)
             cur_url = current["url"]
             cur_depth = current["depth"]
@@ -487,7 +484,7 @@ class BrowserRobot:
                 if not safe_t:
                     safe_t = cur_url
                 total_found = len(internal_entries) + len(third_party_entries)
-                print(f"  [Spider #{discovery_count}/{max_discovery_visits}] ({len(internal_entries)} internal, {len(third_party_entries)} external links) -> {safe_t}")
+                print(f"  [Spider #{discovery_count}] ({len(internal_entries)} internal, {len(third_party_entries)} external links) -> {safe_t}")
 
                 links = self.extract_all_links(include_third_party=include_third_party)
                 for item in links:
@@ -516,8 +513,8 @@ class BrowserRobot:
                             third_party_entries.append(entry)
                         else:
                             internal_entries.append(entry)
-                            # Queue internal pages for deeper link discovery
-                            if cur_depth + 1 < max_discovery_depth and len(internal_entries) < discovery_limit:
+                            # Queue internal pages without depth or section limits
+                            if (max_discovery_depth == 0 or cur_depth + 1 < max_discovery_depth) and (len(internal_entries) < limit_pages):
                                 queue.append({
                                     "url": l_url,
                                     "depth": cur_depth + 1,
@@ -543,7 +540,7 @@ class BrowserRobot:
                         "pages": combined
                     }, f, indent=2)
 
-                if (len(internal_entries) + len(third_party_entries)) >= discovery_limit:
+                if (len(internal_entries) + len(third_party_entries)) >= limit_pages:
                     break
 
             except Exception as e:
