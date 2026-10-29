@@ -50,6 +50,12 @@ class OnlineCodeLearner:
         if os.path.exists(vqvae_path):
             v_data = torch.load(vqvae_path, map_location=self.device, weights_only=False)
             self.vqvae.load_state_dict(v_data["model"])
+        else:
+            print(
+                f"  [!] WARNING: no VQ-VAE checkpoint found at '{vqvae_path}'. "
+                "Live training will run against an UNTRAINED, randomly-initialized concept "
+                "tokenizer - learned codes will be meaningless. Run train_vqvae.py first."
+            )
         self.vqvae.eval()
         for p in self.vqvae.parameters():
             p.requires_grad = False
@@ -73,6 +79,12 @@ class OnlineCodeLearner:
         if os.path.exists(base_ckpt):
             g_data = torch.load(base_ckpt, map_location=self.device, weights_only=False)
             self.generator.load_state_dict(g_data["model"], strict=False)
+        else:
+            print(
+                f"  [!] WARNING: no generator checkpoint found (looked for '{self.checkpoint_out}', "
+                "'checkpoints/generator_official_python.pt', 'checkpoints/generator.pt'). "
+                "Starting live training from a randomly-initialized generator."
+            )
 
         self.generator.train()
         self.optimizer = AdamW(self.generator.parameters(), lr=self.lr, weight_decay=0.01)
@@ -83,15 +95,29 @@ class OnlineCodeLearner:
         runs backpropagation, and updates model weights in real time.
         """
         pairs = []
+        context_len = self.config.context_length
+        skipped_too_long = 0
 
         # 1. Code block pairs
         for b in code_blocks:
             code = b.get("code", "").strip()
             context = b.get("context", "").strip() or f"# Code from {title}"
             if len(code) > 10:
+                # Target is truncated to context_len bytes by CodeDataset - a snippet much
+                # longer than that would be cut mid-statement into a misleading training
+                # target, so skip it instead of teaching the model a chopped-off fragment.
+                if len(code.encode("utf-8")) > context_len:
+                    skipped_too_long += 1
+                    continue
                 # Use context/comment as prompt, code as target
                 prompt = context if context.startswith("#") else f"# {context}\n"
                 pairs.append((prompt, code))
+
+        if skipped_too_long:
+            print(
+                f"  [!] Skipped {skipped_too_long} code block(s) longer than "
+                f"context_length={context_len} bytes (would be truncated mid-statement)."
+            )
 
         # 2. Text paragraphs pairs (teaches syntax and natural language explanations)
         for p in text_paragraphs[:10]:

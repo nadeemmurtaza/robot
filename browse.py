@@ -5,6 +5,7 @@ Usage:
     python browse.py "https://your-link-here.com" --head
     python browse.py "https://your-link-here.com" --click "Next"
 """
+import os
 import sys
 import time
 import argparse
@@ -106,6 +107,11 @@ def main():
         action="store_false",
         help="Exclude third party links and strictly confine to target domain."
     )
+    parser.add_argument(
+        "--fresh",
+        action="store_true",
+        help="Ignore existing manifest and re-crawl the site from scratch (default: auto-resume)."
+    )
     args = parser.parse_args()
 
     print("=" * 70)
@@ -126,36 +132,70 @@ def main():
     total_characters = 0
     total_words = 0
     total_code_blocks = 0
+    # Truncate the corpus file only on a fresh crawl (or if it doesn't exist yet) -
+    # a resumed run must APPEND, never wipe out prior pages already marked completed.
+    save_file_fresh = bool(args.save) and (args.fresh or not os.path.exists(args.save))
 
-    with BrowserRobot(headless=not args.head) as bot:
-        try:
+    try:
+        with BrowserRobot(headless=not args.head) as bot:
             # ---------------------------------------------------------
             # MODE S: FULL SITE SPIDER, MASTER MANIFEST & DEEP LEARNING
             # ---------------------------------------------------------
             if args.spider:
                 manifest_file = args.manifest
-                print("\n" + "=" * 70)
-                print("  PHASE 1: FULL SITE SPIDER & MANIFEST COMPILATION")
-                print("  Collecting all pages, sub-pages, links, menus, sub-menus")
-                print(f"  (Include Third Party Links: {args.include_third_party})...")
-                print("=" * 70)
+                full_manifest = None
 
-                full_manifest = bot.collect_full_site_manifest(
-                    start_url=args.url,
-                    max_pages=args.max_pages,
-                    include_third_party=args.include_third_party,
-                    manifest_file=manifest_file
-                )
+                # Check if existing manifest can be resumed
+                if not args.fresh and os.path.exists(manifest_file):
+                    try:
+                        with open(manifest_file, "r", encoding="utf-8") as f:
+                            saved_data = json.load(f)
+                        pages = saved_data.get("pages", [])
+                        if pages:
+                            full_manifest = pages
+                            completed_count = sum(1 for p in full_manifest if p.get("status") == "completed")
+                            pending_count = len(full_manifest) - completed_count
+                            print("\n" + "=" * 70)
+                            print(f"  [AUTO-RESUME ACTIVE] Loaded existing manifest: {manifest_file}")
+                            print(f"  - Total Pages Discovered: {len(full_manifest)}")
+                            print(f"  - Already Completed     : {completed_count}")
+                            print(f"  - Remaining to Read     : {pending_count}")
+                            print("  (Pass --fresh to ignore this manifest and re-crawl from scratch)")
+                            print("=" * 70)
+                    except Exception as e:
+                        print(f"  [!] Note loading existing manifest: {e}")
+                        full_manifest = None
+
+                if full_manifest is None:
+                    print("\n" + "=" * 70)
+                    print("  PHASE 1: FULL SITE SPIDER & MANIFEST COMPILATION")
+                    print("  Collecting all pages, sub-pages, links, menus, sub-menus")
+                    print(f"  (Include Third Party Links: {args.include_third_party})...")
+                    print("=" * 70)
+
+                    full_manifest = bot.collect_full_site_manifest(
+                        start_url=args.url,
+                        max_pages=args.max_pages,
+                        include_third_party=args.include_third_party,
+                        manifest_file=manifest_file
+                    )
 
                 pages_to_process = full_manifest[:args.max_pages] if args.max_pages > 0 else full_manifest
+                already_done = sum(1 for p in pages_to_process if p.get("status") == "completed")
 
                 print("\n" + "=" * 70)
                 print(f"  PHASE 2: AUTONOMOUS READING & LIVE NEURAL TRAINING")
-                print(f"  Systematically learning from {len(pages_to_process)} pages (out of {len(full_manifest)} discovered)...")
+                print(f"  Total in manifest: {len(pages_to_process)} | Already Completed: {already_done}")
+                print(f"  Resuming remaining {len(pages_to_process) - already_done} pages...")
                 print("=" * 70)
 
                 for item_idx, page_info in enumerate(pages_to_process, 1):
                     visit_url = page_info["url"]
+
+                    # Skip already completed pages to resume seamlessly
+                    if page_info.get("status") == "completed":
+                        continue
+
                     page_count += 1
                     raw_manifest_title = page_info.get("title", "Document")
                     safe_manifest_title = raw_manifest_title.encode('ascii', errors='replace').decode('ascii')
@@ -220,7 +260,8 @@ def main():
 
                         # Save to corpus
                         if args.save:
-                            mode = 'w' if page_count == 1 else 'a'
+                            mode = 'w' if save_file_fresh else 'a'
+                            save_file_fresh = False
                             with open(args.save, mode, encoding='utf-8') as f:
                                 f.write(f"\n{'='*70}\n")
                                 f.write(f"PAGE #{page_count} [{p_type}]: {title}\nURL: {visit_url}\n")
@@ -435,10 +476,12 @@ def main():
                     current_url = bot.page.url
                     print(f"  [>>>] 'Next' clicked successfully! Transitioning to: {current_url}")
 
-        except KeyboardInterrupt:
-            print("\n\n" + "!" * 70)
-            print("  [STOPPED] Continuous reading loop paused by user (Ctrl+C)!")
-            print("!" * 70)
+    except KeyboardInterrupt:
+        print("\n\n" + "!" * 70)
+        print("  [STOPPED] Continuous reading loop paused by user (Ctrl+C)!")
+        print("  Progress and live trained weights are safely saved.")
+        print("  Simply re-run the command anytime to auto-resume from where you left off!")
+        print("!" * 70)
 
     print("\n" + "=" * 70)
     print("  AUTONOMOUS CRAWL & READ SUMMARY:")

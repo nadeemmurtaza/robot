@@ -58,20 +58,24 @@ def train_vqvae(config: NCMConfig, epochs: int = 15, checkpoint_path: str = "che
             optimizer.zero_grad()
             
             logits, vq_loss, _ = model(targets)
-            
-            recon_loss = F.cross_entropy(logits.reshape(-1, tokenizer.vocab_size), targets.reshape(-1))
+
+            recon_loss = F.cross_entropy(
+                logits.reshape(-1, tokenizer.vocab_size), targets.reshape(-1),
+                ignore_index=tokenizer.pad_token_id
+            )
             loss = recon_loss + vq_loss
-            
+
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_clip)
             optimizer.step()
-            
+
             total_recon_loss += recon_loss.item() * targets.size(0)
             total_vq_loss += vq_loss.item() * targets.size(0)
-            
+
             preds = torch.argmax(logits, dim=-1)
-            correct_tokens += (preds == targets).sum().item()
-            total_tokens += targets.numel()
+            non_pad = targets != tokenizer.pad_token_id
+            correct_tokens += ((preds == targets) & non_pad).sum().item()
+            total_tokens += non_pad.sum().item()
             
         n_samples = len(train_loader.dataset)
         avg_recon = total_recon_loss / n_samples
@@ -85,7 +89,10 @@ def train_vqvae(config: NCMConfig, epochs: int = 15, checkpoint_path: str = "che
             for batch in val_loader:
                 targets = batch["target"].to(device)
                 logits, _, _ = model(targets)
-                v_loss = F.cross_entropy(logits.reshape(-1, tokenizer.vocab_size), targets.reshape(-1))
+                v_loss = F.cross_entropy(
+                    logits.reshape(-1, tokenizer.vocab_size), targets.reshape(-1),
+                    ignore_index=tokenizer.pad_token_id
+                )
                 val_recon += v_loss.item() * targets.size(0)
         val_recon /= len(val_loader.dataset)
         
