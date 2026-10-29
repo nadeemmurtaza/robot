@@ -23,29 +23,38 @@ from custom_ncm.ncm_model import NextConceptGenerator
 from custom_ncm.hybrid_model import HybridConsistencyNCM
 from custom_ncm.official_python_harvester import OfficialPythonHarvester
 from custom_ncm.attention import convert_legacy_mha_state_dict
+from custom_ncm.train_vqvae import get_device, _warn_if_hardware_insufficient
 
 def train_hybrid_model(
     config: Optional[NCMConfig] = None,
+    tier: str = "small",
     epochs: int = 5,
     batch_size: int = 16,
     checkpoint_dir: str = "checkpoints/hybrid",
     device: Optional[torch.device] = None
 ) -> HybridConsistencyNCM:
     if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = get_device()
     if config is None:
-        config = NCMConfig.small()
-        
+        config = NCMConfig.from_tier(tier)
+    _warn_if_hardware_insufficient(config, device)
+    tier_suffix = "" if tier == "small" else f"_{tier}"
+
     print("=" * 70)
     print("  TRAINING HYBRID CONSISTENCY NEXT-CONCEPT MODEL (HC-NCM)")
     print("  LCM (1-Step Consistency) + Diffusion Gemma (Bidirectional) + NCM + Causal AR")
     print("=" * 70)
-    print(f"[*] Compute Device: {device}")
-    
+    print(f"[*] Compute Device: {device} (tier: {tier})")
+    if config.context_length > 8192:
+        print(
+            "  [*] Note: at this tier, hybrid cross-attention only guarantees the LCM concept "
+            "blueprint is fully visible (bounded global budget), not the full prompt prefix."
+        )
+
     tokenizer = ByteCodeTokenizer()
-    
+
     # 1. Load VQ-VAE
-    vqvae_ckpt = "checkpoints/vqvae_pos.pt" if os.path.exists("checkpoints/vqvae_pos.pt") else "checkpoints/vqvae.pt"
+    vqvae_ckpt = f"checkpoints/vqvae_pos{tier_suffix}.pt" if os.path.exists(f"checkpoints/vqvae_pos{tier_suffix}.pt") else f"checkpoints/vqvae{tier_suffix}.pt"
     if not os.path.exists(vqvae_ckpt):
         from custom_ncm.train_vqvae import train_vqvae
         vqvae = train_vqvae(config, epochs=6, checkpoint_path=vqvae_ckpt)
@@ -58,29 +67,33 @@ def train_hybrid_model(
             levels=config.levels,
             codebook_size=config.vq_codebook_size,
             n_enc_layers=config.vq_enc_layers,
-            n_dec_layers=config.vq_dec_layers
+            n_dec_layers=config.vq_dec_layers,
+            attn_window=config.attn_window,
+            attn_num_global=config.attn_num_global
         ).to(device)
         vqvae.load_state_dict(convert_legacy_mha_state_dict(v_data["model"]))
         print(f"[+] Loaded VQ-VAE Concept Tokenizer from: {vqvae_ckpt}")
-        
+
     vqvae.eval()
     for p in vqvae.parameters():
         p.requires_grad = False
-        
+
     # 2. Load Base Generator
-    gen_ckpt = "checkpoints/generator_official_python.pt"
+    gen_ckpt = f"checkpoints/generator_official_python{tier_suffix}.pt"
     if not os.path.exists(gen_ckpt):
-        gen_ckpt = "checkpoints/generator_base.pt"
+        gen_ckpt = f"checkpoints/generator_base{tier_suffix}.pt"
     if not os.path.exists(gen_ckpt):
-        gen_ckpt = "checkpoints/generator.pt"
-        
+        gen_ckpt = f"checkpoints/generator{tier_suffix}.pt"
+
     ncm_gen = NextConceptGenerator(
         vqvae=vqvae,
         prefix_len=config.prefix_length,
         d_model=config.embed_dim,
         n_head=config.gen_n_head,
         n_layer=config.gen_n_layer,
-        codebook_size=config.vq_codebook_size
+        codebook_size=config.vq_codebook_size,
+        attn_window=config.attn_window,
+        attn_num_global=config.attn_num_global
     ).to(device)
     
     if os.path.exists(gen_ckpt):
@@ -95,15 +108,25 @@ def train_hybrid_model(
         ncm_generator=ncm_gen
     ).to(device)
     
-    # 4. Load Training Corpus
+    # 4. Load Training Corpus (train split only - official_python_corpus.json
+    # is the superset split_dataset.py carved test.jsonl out of; see the same
+    # fix in train_on_official_python.py)
+    train_split_file = "data/train.jsonl"
     corpus_file = "data/official_python_corpus.json"
-    if not os.path.exists(corpus_file):
+    if os.path.exists(train_split_file):
+        corpus = []
+        with open(train_split_file, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    corpus.append(json.loads(line))
+    elif not os.path.exists(corpus_file):
         harvester = OfficialPythonHarvester()
         corpus = harvester.harvest_all(corpus_file)
     else:
         with open(corpus_file, "r", encoding="utf-8") as f:
             corpus = json.load(f)
-            
+
     pairs = [(item["prompt"], item["body"]) for item in corpus]
     dataset = CodeDataset(pairs, tokenizer, prefix_len=config.prefix_length, context_len=config.context_length)
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
@@ -121,7 +144,7 @@ def train_hybrid_model(
     
     # 6. Training Loop
     os.makedirs(checkpoint_dir, exist_ok=True)
-    save_path = os.path.join(checkpoint_dir, "hybrid_model.pt")
+    save_path = os.path.join(checkpoint_dir, f"hybrid_model{tier_suffix}.pt")
     
     print(f"\n[*] Commencing {epochs} epochs of Hybrid Consistency Training...")
     start_time = time.time()
@@ -165,4 +188,10 @@ def train_hybrid_model(
     return hybrid_model
 
 if __name__ == "__main__":
-    train_hybrid_model(epochs=3)
+    import argparse
+    from custom_ncm.config import add_tier_cli_arg
+    parser = argparse.ArgumentParser(description="Train the Hybrid Consistency Next-Concept Model")
+    add_tier_cli_arg(parser)
+    parser.add_argument("--epochs", type=int, default=3)
+    args = parser.parse_args()
+    train_hybrid_model(tier=args.tier, epochs=args.epochs)

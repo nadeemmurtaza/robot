@@ -21,6 +21,7 @@ from custom_ncm.hybrid_model import HybridConsistencyNCM
 from custom_ncm.train_hybrid import train_hybrid_model
 from custom_ncm.verifier import CodeVerifier
 from custom_ncm.attention import convert_legacy_mha_state_dict
+from custom_ncm.train_vqvae import get_device, _warn_if_hardware_insufficient
 
 def print_banner():
     print("=" * 75)
@@ -78,27 +79,34 @@ def run_benchmark():
         print(f"  - Technical Advantage          : {m['notes']}")
     print("\n" + "=" * 75)
 
-def main():
+def main(tier: str = "small"):
     print_banner()
-    
-    config = NCMConfig.small()
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"\n[*] Active Device: {device}")
-    
+
+    config = NCMConfig.from_tier(tier)
+    device = get_device()
+    print(f"\n[*] Active Device: {device} (tier: {tier})")
+    _warn_if_hardware_insufficient(config, device)
+    if config.context_length > 8192:
+        print(
+            "  [*] Note: at this tier, hybrid cross-attention only guarantees the LCM concept "
+            "blueprint is fully visible (bounded global budget), not the full prompt prefix."
+        )
+    tier_suffix = "" if tier == "small" else f"_{tier}"
+
     # Run speed benchmark comparison
     run_benchmark()
-    
+
     # Train or load hybrid model
-    ckpt_path = "checkpoints/hybrid/hybrid_model.pt"
+    ckpt_path = f"checkpoints/hybrid/hybrid_model{tier_suffix}.pt"
     if not os.path.exists(ckpt_path):
         print("\n[Step 1] Training Hybrid Consistency Model on Python Corpus...")
-        hybrid_model = train_hybrid_model(config=config, epochs=4, device=device)
+        hybrid_model = train_hybrid_model(config=config, tier=tier, epochs=4, device=device)
     else:
         print(f"\n[Step 1] Loading existing Hybrid Checkpoint from: {ckpt_path}")
         tokenizer = ByteCodeTokenizer()
-        v_ckpt = "checkpoints/vqvae_pos.pt" if os.path.exists("checkpoints/vqvae_pos.pt") else "checkpoints/vqvae.pt"
+        v_ckpt = f"checkpoints/vqvae_pos{tier_suffix}.pt" if os.path.exists(f"checkpoints/vqvae_pos{tier_suffix}.pt") else f"checkpoints/vqvae{tier_suffix}.pt"
         v_data = torch.load(v_ckpt, map_location=device, weights_only=False)
-        
+
         vqvae = CodeVQVAE(
             vocab_size=tokenizer.vocab_size,
             context_length=config.context_length,
@@ -106,7 +114,9 @@ def main():
             levels=config.levels,
             codebook_size=config.vq_codebook_size,
             n_enc_layers=config.vq_enc_layers,
-            n_dec_layers=config.vq_dec_layers
+            n_dec_layers=config.vq_dec_layers,
+            attn_window=config.attn_window,
+            attn_num_global=config.attn_num_global
         ).to(device)
         vqvae.load_state_dict(convert_legacy_mha_state_dict(v_data["model"]))
         vqvae.eval()
@@ -172,4 +182,9 @@ def main():
         print("=" * 75)
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    from custom_ncm.config import add_tier_cli_arg
+    parser = argparse.ArgumentParser(description="Full HC-NCM pipeline demo")
+    add_tier_cli_arg(parser)
+    args = parser.parse_args()
+    main(tier=args.tier)

@@ -20,21 +20,41 @@ from custom_ncm.ncm_model import NextConceptGenerator
 from custom_ncm.lcm_flow import LatentConsistencyPlanner
 from custom_ncm.verifier import CodeVerifier, VerificationResult
 from custom_ncm.rope import RotaryPositionalEmbedding
+from custom_ncm.attention import WindowedAttention
 
 class CausalTransformerBlock(nn.Module):
     """
     Causal Transformer Block with Cross-Attention (Gemma-style AR Decoder).
-    Self-attention is strictly causal (lower-triangular).
-    Cross-attention attends to the Consistency Concept blueprint.
+    Self-attention is strictly causal (lower-triangular). Cross-attention
+    attends to the Consistency Concept blueprint (bidirectional - it's a
+    fixed, already-complete blueprint, not a sequential causal input).
+
+    Both use WindowedAttention instead of dense nn.MultiheadAttention: at the
+    1M-token tier a dense causal mask alone is a [L, L] tensor (~1.1 trillion
+    entries), and cross-attention from L query positions to the blueprint is
+    [L, Lk] per head - both infeasible to materialize at once regardless of
+    hardware. WindowedAttention falls back to exact dense attention for short
+    sequences, so small/medium/large tiers are unaffected.
     """
-    def __init__(self, d_model: int, n_head: int = 4, dropout: float = 0.1):
+    def __init__(self, d_model: int, n_head: int = 4, dropout: float = 0.1,
+                 window_size: int = 2048, num_global: int = 128,
+                 cross_num_global: Optional[int] = None):
         super().__init__()
         self.ln1 = nn.LayerNorm(d_model)
-        self.self_attn = nn.MultiheadAttention(d_model, n_head, dropout=dropout, batch_first=True)
-        
+        self.self_attn = WindowedAttention(d_model, n_head, window_size=window_size,
+                                            num_global=num_global, dropout=dropout, causal=True)
+
         self.ln_cross = nn.LayerNorm(d_model)
-        self.cross_attn = nn.MultiheadAttention(d_model, n_head, dropout=dropout, batch_first=True)
-        
+        # cross_num_global must cover the FULL blueprint length, not just the
+        # causal sequence's num_global - cross-attention keys aren't in the
+        # same coordinate space as the query, so "local window" is meaningless
+        # here; every query needs the whole (small) blueprint as its "global"
+        # set, or it silently loses part of it whenever the blueprint
+        # (context.levels[1]) is bigger than num_global at a large tier.
+        self.cross_attn = WindowedAttention(d_model, n_head, window_size=window_size,
+                                             num_global=cross_num_global or num_global,
+                                             dropout=dropout, causal=False)
+
         self.ln2 = nn.LayerNorm(d_model)
         self.mlp = nn.Sequential(
             nn.Linear(d_model, 4 * d_model),
@@ -44,22 +64,17 @@ class CausalTransformerBlock(nn.Module):
             nn.Dropout(dropout)
         )
 
-    def forward(
-        self,
-        x: torch.Tensor,
-        context: torch.Tensor,
-        causal_mask: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
-        # Causal Self-Attention
+    def forward(self, x: torch.Tensor, context: torch.Tensor) -> torch.Tensor:
+        # Causal Self-Attention (q_start=0: x is the whole causal sequence)
         normed = self.ln1(x)
-        sa_out, _ = self.self_attn(normed, normed, normed, attn_mask=causal_mask)
-        x = x + sa_out
-        
-        # Cross-Attention to LCM/NCM concept representations
+        x = x + self.self_attn(normed, normed, normed, q_start=0)
+
+        # Cross-Attention to LCM/NCM concept representations (not positionally
+        # aligned with x, so this is always the dense-fallback-or-windowed
+        # path keyed purely on context's own length, q_start=0)
         normed_cross = self.ln_cross(x)
-        ca_out, _ = self.cross_attn(normed_cross, context, context)
-        x = x + ca_out
-        
+        x = x + self.cross_attn(normed_cross, context, context, q_start=0)
+
         # Feedforward
         x = x + self.mlp(self.ln2(x))
         return x
@@ -96,7 +111,9 @@ class HybridConsistencyNCM(nn.Module):
                 d_model=config.embed_dim,
                 n_head=config.gen_n_head,
                 n_layer=config.gen_n_layer,
-                codebook_size=config.vq_codebook_size
+                codebook_size=config.vq_codebook_size,
+                attn_window=config.attn_window,
+                attn_num_global=config.attn_num_global
             )
             
         # 2. Latent Consistency Planner (LCM + Diffusion Gemma bidirectional backbone)
@@ -128,8 +145,23 @@ class HybridConsistencyNCM(nn.Module):
             self.target_pos_emb = nn.Embedding(self.context_len, self.embed_dim)
             self.target_rope = None
             
+        # Cross-attention context is [z_0_pred, prefix_embeds] (blueprint
+        # first - see forward()/fast_generate()) = lcm_seq_len + prefix_len
+        # long. Making the WHOLE thing "global" would itself re-create the
+        # O(L^2)-ish blowup windowing exists to avoid (at the 2B/1M tier,
+        # prefix_len=131072 alone is too big to be "always visible" from
+        # every one of 1,048,576 causal positions). So cross_num_global only
+        # guarantees the small, high-value blueprint (lcm_seq_len) is always
+        # fully visible; the much larger raw prefix only gets in if
+        # attn_num_global happens to be bigger than the blueprint - same
+        # bounded-global tradeoff used everywhere else in this codebase, not
+        # full prefix visibility.
         self.causal_blocks = nn.ModuleList([
-            CausalTransformerBlock(self.embed_dim, n_head=config.gen_n_head)
+            CausalTransformerBlock(
+                self.embed_dim, n_head=config.gen_n_head,
+                window_size=config.attn_window, num_global=config.attn_num_global,
+                cross_num_global=max(config.attn_num_global, self.lcm_seq_len)
+            )
             for _ in range(3)
         ])
         self.causal_ln = nn.LayerNorm(self.embed_dim)
@@ -193,18 +225,17 @@ class HybridConsistencyNCM(nn.Module):
         lcm_loss = F.mse_loss(z_0_pred, clean_z0)
         
         # 4. Causal LLM Token Realizer Loss
-        # Context consists of prefix embeddings concatenated with predicted concept latents
-        concept_context = torch.cat([prefix_embeds, z_0_pred], dim=1)  # [B, P + S_lcm, D]
-        
+        # Blueprint first, then prefix embeddings - see causal_blocks comment
+        # above for why the order matters now that cross-attention is bounded.
+        concept_context = torch.cat([z_0_pred, prefix_embeds], dim=1)  # [B, S_lcm + P, D]
+
         # Autoregressive target input shifted by 1
         target_in = self.target_token_emb(target) + self.get_target_pos(target, L)
-        
-        # Causal mask (prevent seeing future tokens)
-        causal_mask = torch.triu(torch.full((L, L), float('-inf'), device=device), diagonal=1)
-        
+
+        # Causal masking is now built into self_attn (WindowedAttention(causal=True))
         h = target_in
         for block in self.causal_blocks:
-            h = block(h, concept_context, causal_mask=causal_mask)
+            h = block(h, concept_context)
         h = self.causal_ln(h)
         token_logits = self.token_head(h)
         
@@ -258,22 +289,27 @@ class HybridConsistencyNCM(nn.Module):
         ]
         
         # Step 3: Causal Gemma Token Realization (Conditioned on Consistency Blueprint)
-        # Generates exact code tokens causally
-        concept_context = torch.cat([prefix_embeds, lcm_concept_blueprint], dim=1)
+        # Generates exact code tokens causally. Blueprint first - see
+        # causal_blocks comment in __init__ for why the order matters.
+        concept_context = torch.cat([lcm_concept_blueprint, prefix_embeds], dim=1)
         generated_tokens = []
         pad_id = tokenizer.pad_token_id
-        
-        # Start with empty target input and generate autoregressively with guidance
+
+        # Start with empty target input and generate autoregressively with
+        # guidance. NOTE: this regenerates from scratch each step (no KV
+        # cache) - fine at the small/medium/large tiers' tiny context_len,
+        # but would be a separate, serious performance problem at the 1M
+        # tier (context_len-many steps, each recomputing attention over an
+        # ever-growing sequence) - not fixed here, flagging it.
         curr_tokens = [pad_id]
         for step in range(self.context_len):
             curr_tensor = torch.tensor([curr_tokens], dtype=torch.long, device=device)
             seq_len = curr_tensor.shape[1]
             x_emb = self.target_token_emb(curr_tensor) + self.get_target_pos(curr_tensor, seq_len)
-            
-            causal_mask = torch.triu(torch.full((seq_len, seq_len), float('-inf'), device=device), diagonal=1)
+
             h = x_emb
             for block in self.causal_blocks:
-                h = block(h, concept_context, causal_mask=causal_mask)
+                h = block(h, concept_context)
             h = self.causal_ln(h)
             next_logits = self.token_head(h[:, -1, :]) / max(temperature, 1e-4)
             

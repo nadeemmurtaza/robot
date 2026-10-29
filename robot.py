@@ -14,6 +14,7 @@ from custom_ncm.ncm_model import NextConceptGenerator
 from custom_ncm.generate import generate_code_coarse_to_fine
 from custom_ncm.hybrid_model import HybridConsistencyNCM
 from custom_ncm.attention import convert_legacy_mha_state_dict
+from custom_ncm.train_vqvae import get_device, _warn_if_hardware_insufficient
 
 def get_param_count(model: torch.nn.Module) -> int:
     return sum(p.numel() for p in model.parameters())
@@ -105,8 +106,10 @@ def main():
     parser.add_argument("--hybrid", action="store_true", help="Run in Hybrid Consistency Model mode (LCM + Gemma + NCM)")
     parser.add_argument("--prompt", type=str, default=None, help="Prompt prefix for code generation")
     parser.add_argument("--checkpoint", type=str, default=None, help="Path to checkpoint")
+    from custom_ncm.config import add_tier_cli_arg
+    add_tier_cli_arg(parser)
     args = parser.parse_args()
-    
+
     if args.tiers:
         print_model_tiers()
         return
@@ -114,19 +117,30 @@ def main():
     print("=" * 70)
     print("  WELCOME TO CODE ROBOT (NEXT-CONCEPT & HYBRID CONSISTENCY MODELING)")
     print("=" * 70)
-    
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    device = get_device()
     tokenizer = ByteCodeTokenizer()
-    cfg = NCMConfig.small()
-    v_ckpt = "checkpoints/vqvae_pos.pt" if os.path.exists("checkpoints/vqvae_pos.pt") else "checkpoints/vqvae.pt"
-    
+    cfg = NCMConfig.from_tier(args.tier)
+    _warn_if_hardware_insufficient(cfg, device)
+    tier_suffix = "" if args.tier == "small" else f"_{args.tier}"
+    v_ckpt_candidates = [f"checkpoints/vqvae_pos{tier_suffix}.pt", f"checkpoints/vqvae{tier_suffix}.pt"]
+    if tier_suffix:
+        v_ckpt_candidates += ["checkpoints/vqvae_pos.pt", "checkpoints/vqvae.pt"]  # legacy fallback
+    v_ckpt = next((p for p in v_ckpt_candidates if os.path.exists(p)), v_ckpt_candidates[0])
+
     if args.hybrid:
-        print("[*] Running in HYBRID CONSISTENCY MODE (1-Step LCM + Bidirectional + NCM + Causal AR)")
-        h_ckpt = "checkpoints/hybrid/hybrid_model.pt"
+        print(f"[*] Running in HYBRID CONSISTENCY MODE (1-Step LCM + Bidirectional + NCM + Causal AR) - tier: {args.tier}")
+        if cfg.context_length > 8192:
+            print(
+                "  [*] Note: at this tier, hybrid cross-attention only guarantees the LCM concept "
+                "blueprint is fully visible (bounded global budget), not the full prompt prefix - "
+                "see custom_ncm/hybrid_model.py's causal_blocks comment."
+            )
+        h_ckpt = f"checkpoints/hybrid/hybrid_model{tier_suffix}.pt"
         if not os.path.exists(h_ckpt):
             print(f"[!] Hybrid checkpoint not found at {h_ckpt}. Training new hybrid checkpoint...")
             from custom_ncm.train_hybrid import train_hybrid_model
-            hybrid_model = train_hybrid_model(config=cfg, epochs=3, device=device)
+            hybrid_model = train_hybrid_model(config=cfg, tier=args.tier, epochs=3, device=device)
         else:
             v_data = torch.load(v_ckpt, map_location=device, weights_only=False)
             vqvae = CodeVQVAE(
@@ -136,7 +150,9 @@ def main():
                 levels=cfg.levels,
                 codebook_size=cfg.vq_codebook_size,
                 n_enc_layers=cfg.vq_enc_layers,
-                n_dec_layers=cfg.vq_dec_layers
+                n_dec_layers=cfg.vq_dec_layers,
+                attn_window=cfg.attn_window,
+                attn_num_global=cfg.attn_num_global
             ).to(device)
             vqvae.load_state_dict(convert_legacy_mha_state_dict(v_data["model"]))
             vqvae.eval()
@@ -162,13 +178,17 @@ def main():
         return
 
     # Standard NCM Generator Mode
-    ckpt_path = args.checkpoint or ("checkpoints/generator_official_python.pt" if os.path.exists("checkpoints/generator_official_python.pt") else "checkpoints/generator.pt")
-        
+    ckpt_path = args.checkpoint or (
+        f"checkpoints/generator_official_python{tier_suffix}.pt"
+        if os.path.exists(f"checkpoints/generator_official_python{tier_suffix}.pt")
+        else f"checkpoints/generator{tier_suffix}.pt"
+    )
+
     if os.path.exists(ckpt_path):
         print(f"[*] Loading Code Robot from: {ckpt_path}")
         v_data = torch.load(v_ckpt, map_location=device, weights_only=False)
-        cfg = v_data.get("config", NCMConfig())
-        
+        cfg = v_data.get("config", cfg)
+
         vqvae = CodeVQVAE(
             vocab_size=tokenizer.vocab_size,
             context_length=cfg.context_length,
@@ -176,20 +196,31 @@ def main():
             levels=cfg.levels,
             codebook_size=cfg.vq_codebook_size,
             n_enc_layers=cfg.vq_enc_layers,
-            n_dec_layers=cfg.vq_dec_layers
+            n_dec_layers=cfg.vq_dec_layers,
+            attn_window=cfg.attn_window,
+            attn_num_global=cfg.attn_num_global
         ).to(device)
         vqvae.load_state_dict(convert_legacy_mha_state_dict(v_data["model"]))
         vqvae.eval()
 
+        g_data = torch.load(ckpt_path, map_location=device, weights_only=False)
+        # The generator checkpoint's own layer count can differ from cfg.gen_n_layer
+        # (cfg here comes from the VQ-VAE checkpoint, not the generator one) - detect
+        # it from the checkpoint's keys instead of assuming, same fix as generate.py.
+        n_layers = max(
+            [int(k.split(".")[1]) for k in g_data["model"].keys() if k.startswith("blocks.")],
+            default=cfg.gen_n_layer - 1
+        ) + 1
         generator = NextConceptGenerator(
             vqvae=vqvae,
             prefix_len=cfg.prefix_length,
             d_model=cfg.embed_dim,
             n_head=cfg.gen_n_head,
-            n_layer=cfg.gen_n_layer,
-            codebook_size=cfg.vq_codebook_size
+            n_layer=n_layers,
+            codebook_size=cfg.vq_codebook_size,
+            attn_window=cfg.attn_window,
+            attn_num_global=cfg.attn_num_global
         ).to(device)
-        g_data = torch.load(ckpt_path, map_location=device, weights_only=False)
         generator.load_state_dict(convert_legacy_mha_state_dict(g_data["model"]))
         generator.eval()
         

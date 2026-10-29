@@ -19,7 +19,16 @@ def main():
     parser.add_argument(
         "url",
         type=str,
-        help="The URL of the webpage you want to browse and read."
+        nargs="?",
+        default=None,
+        help="The URL of the webpage you want to browse and read. Not needed with --stop."
+    )
+    parser.add_argument(
+        "--stop",
+        action="store_true",
+        help="Signal an already-running crawl using the same --manifest to stop gracefully "
+             "after it finishes the page it's on, then exit immediately. Run this as a separate "
+             "command (new terminal) while the crawl is running; no URL needed."
     )
     parser.add_argument(
         "--head",
@@ -112,7 +121,26 @@ def main():
         action="store_true",
         help="Ignore existing manifest and re-crawl the site from scratch (default: auto-resume)."
     )
+    from custom_ncm.config import add_tier_cli_arg
+    add_tier_cli_arg(parser, default="web")
     args = parser.parse_args()
+
+    stop_file = args.manifest + ".stop"
+
+    if args.stop:
+        with open(stop_file, "w", encoding="utf-8") as f:
+            f.write("stop requested\n")
+        print(f"[+] Stop signal written to {stop_file}")
+        print("    The running crawl (same --manifest) will stop after its current page,")
+        print("    save everything, and exit. Rerun the same command to resume where it left off.")
+        return
+
+    if not args.url:
+        parser.error("the following arguments are required: url (unless using --stop)")
+
+    # A stale stop file from a previous run would make this run exit instantly.
+    if os.path.exists(stop_file):
+        os.remove(stop_file)
 
     print("=" * 70)
     print("  CODE ROBOT: AUTONOMOUS BROWSER & READING AGENT")
@@ -120,12 +148,26 @@ def main():
     print(f"[*] Target URL : {args.url}")
     print(f"[*] Window Mode: {'Visible Chrome (Headed)' if args.head else 'Headless Chrome'}")
     print(f"[*] Live Train : {'ENABLED (Model weights update on each page)' if args.train else 'Disabled (Reading & Scraping only)'}")
+    print(f"[*] To stop    : run `python browse.py --stop --manifest {args.manifest}` in another terminal, or Ctrl+C here.")
+    if args.spider:
+        print(f"[*] To resume  : rerun this exact command (auto-resumes from {args.manifest} unless --fresh is passed).")
 
     learner = None
+    baseline_eval = None
+    page_losses = []
+    label_totals = {}
     if args.train:
         from custom_ncm.online_learner import OnlineCodeLearner
-        print("[*] Initializing Online Neural Learner (Live Training Active)...")
-        learner = OnlineCodeLearner()
+        print(f"[*] Initializing Online Neural Learner (Live Training Active, tier: {args.tier})...")
+        learner = OnlineCodeLearner(tier=args.tier)
+        baseline_eval = learner.evaluate()
+        weight_snapshot_before = learner.weight_snapshot()
+        print(
+            f"[*] Baseline (before this run): syntax-valid {baseline_eval['syntax_valid_pct']:.1f}% "
+            f"| avg output length {baseline_eval['avg_output_len']:.1f} chars "
+            f"(on {baseline_eval['n_probes']} fixed probe prompts)"
+        )
+        print(f"[*] Baseline weight L2 norm: {weight_snapshot_before['l2_norm']:.4f}")
 
     current_url = args.url
     page_count = 0
@@ -190,6 +232,14 @@ def main():
                 print("=" * 70)
 
                 for item_idx, page_info in enumerate(pages_to_process, 1):
+                    if os.path.exists(stop_file):
+                        os.remove(stop_file)
+                        print("\n" + "!" * 70)
+                        print("  [STOPPED] Stop signal received - halting after the last completed page.")
+                        print(f"  Progress is saved in {manifest_file}. Rerun the same command to resume.")
+                        print("!" * 70)
+                        break
+
                     visit_url = page_info["url"]
 
                     # Skip already completed pages to resume seamlessly
@@ -237,9 +287,12 @@ def main():
                                 code_blocks=code_blocks,
                                 text_paragraphs=paragraphs
                             )
+                            for k, v in train_res.get('label_counts', {}).items():
+                                label_totals[k] = label_totals.get(k, 0) + v
                             train_loss = train_res.get('loss')
                             if train_loss is not None:
                                 print(f"  [+] Training Loss: {train_loss:.4f} | Weights Updated -> {train_res['checkpoint']}")
+                                page_losses.append(train_loss)
 
                         # Update manifest page status
                         page_info["status"] = "completed"
@@ -302,6 +355,13 @@ def main():
                     urls_to_visit.insert(0, args.url)
 
                 for item_idx, visit_url in enumerate(urls_to_visit, 1):
+                    if os.path.exists(stop_file):
+                        os.remove(stop_file)
+                        print("\n" + "!" * 70)
+                        print("  [STOPPED] Stop signal received - halting after the last completed page.")
+                        print("!" * 70)
+                        break
+
                     page_count += 1
                     print("\n" + "=" * 70)
                     print(f"  [TOC PAGE {item_idx}/{len(urls_to_visit)}] OPENING: {visit_url}")
@@ -336,8 +396,11 @@ def main():
                             code_blocks=code_blocks,
                             text_paragraphs=paragraphs
                         )
+                        for k, v in train_res.get('label_counts', {}).items():
+                            label_totals[k] = label_totals.get(k, 0) + v
                         if train_res['loss'] is not None:
                             print(f"  [+] Training Loss: {train_res['loss']:.4f} | Weights Updated -> {train_res['checkpoint']}")
+                            page_losses.append(train_res['loss'])
 
                     # Save to corpus
                     if args.save:
@@ -367,6 +430,13 @@ def main():
             # ---------------------------------------------------------
             else:
                 while True:
+                    if os.path.exists(stop_file):
+                        os.remove(stop_file)
+                        print("\n" + "!" * 70)
+                        print("  [STOPPED] Stop signal received - halting after the last completed page.")
+                        print("!" * 70)
+                        break
+
                     page_count += 1
                     print("\n" + "=" * 70)
                     print(f"  [PAGE #{page_count}] READING: {current_url}")
@@ -429,8 +499,11 @@ def main():
                             code_blocks=code_blocks,
                             text_paragraphs=paragraphs
                         )
+                        for k, v in train_res.get('label_counts', {}).items():
+                            label_totals[k] = label_totals.get(k, 0) + v
                         if train_res['loss'] is not None:
                             print(f"  [+] Training Loss: {train_res['loss']:.4f} | Weights Updated -> {train_res['checkpoint']}")
+                            page_losses.append(train_res['loss'])
 
                     # Save / Append page to output file
                     if args.save:
@@ -489,6 +562,63 @@ def main():
     print(f"  - Total Words Read   : {total_words:,}")
     print(f"  - Total Characters   : {total_characters:,}")
     print(f"  - Total Code Blocks  : {total_code_blocks:,}")
+
+    if label_totals:
+        from custom_ncm.online_learner import KEPT_LABELS
+        print("\n" + "=" * 70)
+        print("  DATA LABELING SUMMARY (this run)")
+        print("=" * 70)
+        kept = sum(label_totals.get(k, 0) for k in KEPT_LABELS)
+        rejected_total = sum(v for k, v in label_totals.items() if k not in KEPT_LABELS)
+        print(f"  - Kept (code)        : {label_totals.get('code', 0)}")
+        print(f"  - Kept (code, truncated to fit): {label_totals.get('code_truncated', 0)}")
+        print(f"  - Kept (note)        : {label_totals.get('note', 0)}")
+        print(f"  - Rejected total     : {rejected_total}")
+        for k, v in sorted(label_totals.items()):
+            if k not in KEPT_LABELS:
+                print(f"      - {k:<18}: {v}")
+        total_candidates = kept + rejected_total
+        if total_candidates:
+            print(f"  - Kept rate          : {100.0 * kept / total_candidates:.1f}% ({kept}/{total_candidates})")
+        print("=" * 70)
+
+    if learner and baseline_eval is not None:
+        print("\n" + "=" * 70)
+        print("  MODEL IMPROVEMENT REPORT (this run)")
+        print("=" * 70)
+        final_eval = learner.evaluate()
+        print(
+            f"  - Syntax-valid %     : {baseline_eval['syntax_valid_pct']:.1f}% -> "
+            f"{final_eval['syntax_valid_pct']:.1f}% "
+            f"({final_eval['syntax_valid_pct'] - baseline_eval['syntax_valid_pct']:+.1f} pts, "
+            f"{final_eval['n_probes']} fixed probe prompts)"
+        )
+        print(
+            f"  - Avg output length  : {baseline_eval['avg_output_len']:.1f} -> "
+            f"{final_eval['avg_output_len']:.1f} chars"
+        )
+        if page_losses:
+            split = max(1, len(page_losses) // 5)
+            early_avg = sum(page_losses[:split]) / split
+            late_avg = sum(page_losses[-split:]) / split
+            print(
+                f"  - Training loss      : {early_avg:.4f} (first {split} pages) -> "
+                f"{late_avg:.4f} (last {split} pages) over {len(page_losses)} trained pages"
+            )
+        else:
+            print("  - Training loss      : no pages had code blocks to train on")
+        weight_report = learner.weight_drift(weight_snapshot_before)
+        print(
+            f"  - Weight L2 norm     : {weight_report['l2_norm_before']:.4f} -> "
+            f"{weight_report['l2_norm_after']:.4f} (moved {weight_report['l2_delta']:.4f}, "
+            f"cosine similarity to start: {weight_report['cosine_similarity_to_before']:.4f})"
+        )
+        print(
+            "  NOTE: this is one run on one site with a tiny model/corpus - "
+            "treat small deltas as noise, not a verdict."
+        )
+        print("=" * 70)
+
     if args.save:
         print(f"  - Complete Corpus In : {args.save}")
     print("=" * 70)

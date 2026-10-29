@@ -106,6 +106,30 @@ class NCMConfig:
         )
 
     @classmethod
+    def web(cls) -> "NCMConfig":
+        """
+        Web tier (~40M params) - sized for REAL scraped code, not toy
+        snippets. small/medium/large cap out at 64/128/256 BYTES of code,
+        which rejects the large majority of real functions pulled off actual
+        web pages (code_too_long in online_learner.py's data labeling step).
+        1536 bytes covers the great majority of real single functions/small
+        classes while staying small enough to train on CPU (no windowed
+        attention needed - every level still fits the dense-attention
+        fallback in custom_ncm/attention.py).
+        """
+        return cls(
+            context_length=1536,
+            prefix_length=256,
+            levels=[8, 64, 384, 1536],
+            embed_dim=256,
+            vq_codebook_size=512,
+            vq_enc_layers=4,
+            vq_dec_layers=4,
+            gen_n_layer=6,
+            gen_n_head=8
+        )
+
+    @classmethod
     def two_billion_1m(cls) -> "NCMConfig":
         """
         Frontier 2.04 Billion Parameter Tier with 1M Context Window (1,048,576 tokens).
@@ -154,6 +178,7 @@ class NCMConfig:
             "small": cls.small,
             "medium": cls.medium,
             "large": cls.large,
+            "web": cls.web,
             "two_billion_1m": cls.two_billion_1m,
             "two_billion": cls.two_billion,
         }
@@ -173,8 +198,10 @@ def add_tier_cli_arg(parser, default: str = "small"):
     """
     parser.add_argument(
         "--tier", type=str, default=default,
-        choices=["small", "medium", "large", "two_billion_1m"],
-        help="Model size tier (default: %(default)s). 'two_billion_1m' needs a "
-             "TPU/A100-class accelerator with tens of GB RAM - see README."
+        choices=["small", "medium", "large", "web", "two_billion_1m"],
+        help="Model size tier (default: %(default)s). 'web' is sized for real scraped code "
+             "(1536-byte context, vs. 64/128/256 for small/medium/large) - use it for "
+             "browse.py --train on real sites. 'two_billion_1m' needs a TPU/A100-class "
+             "accelerator with tens of GB RAM - see README."
     )
     return parser

@@ -33,7 +33,7 @@ def convert_legacy_mha_state_dict(state_dict: dict) -> dict:
     both and needs no change).
     """
     converted = {}
-    pattern = re.compile(r"^(.*\.attn)\.in_proj_(weight|bias)$")
+    pattern = re.compile(r"^(.*\.(?:attn|self_attn|cross_attn))\.in_proj_(weight|bias)$")
     for key, value in state_dict.items():
         m = pattern.match(key)
         if not m:
@@ -55,10 +55,16 @@ class WindowedAttention(nn.Module):
     exactly how the NCM block-causal structure and the VQ-VAE encoder/decoder
     use attention, so it's a drop-in replacement for nn.MultiheadAttention in
     both places.
+
+    causal=True additionally forbids a query from attending to any key whose
+    absolute position is greater than its own - for the hybrid model's causal
+    AR decoder, where self_attn must stay strictly autoregressive. A query is
+    always guaranteed to see at least itself (its own position), so causal
+    masking here never produces an all -inf row / NaN softmax.
     """
 
     def __init__(self, d_model: int, n_head: int, window_size: int = 2048,
-                 num_global: int = 128, dropout: float = 0.1):
+                 num_global: int = 128, dropout: float = 0.1, causal: bool = False):
         super().__init__()
         assert d_model % n_head == 0, "d_model must be divisible by n_head"
         self.d_model = d_model
@@ -66,6 +72,7 @@ class WindowedAttention(nn.Module):
         self.head_dim = d_model // n_head
         self.window_size = window_size
         self.num_global = num_global
+        self.causal = causal
         self.scale = self.head_dim ** -0.5
 
         self.q_proj = nn.Linear(d_model, d_model)
@@ -87,10 +94,19 @@ class WindowedAttention(nn.Module):
         k = self._split_heads(self.k_proj(key))
         v = self._split_heads(self.v_proj(value))
 
-        # Exact dense attention whenever materializing it is cheap - keeps
-        # small/medium/large tiers numerically identical to plain attention.
-        if Lq * Lk <= 4 * self.window_size * max(Lq, 1):
+        # Exact dense attention only when the whole query fits in one chunk
+        # anyway (so chunking wouldn't subdivide it). Checking Lq*Lk against
+        # window*Lq is NOT enough on its own - it cancels Lq out, so a huge Lq
+        # against a tiny Lk (e.g. cross-attention from 1M causal positions to
+        # a small fixed blueprint) would wrongly look "cheap" and still
+        # allocate one [Lq, Lk] tensor in one shot. Gating on Lq alone avoids
+        # that regardless of how small Lk is.
+        if Lq <= self.window_size:
             attn = torch.matmul(q, k.transpose(-2, -1)) * self.scale
+            if self.causal:
+                q_pos = torch.arange(q_start, q_start + Lq, device=query.device).unsqueeze(1)
+                k_pos = torch.arange(Lk, device=query.device).unsqueeze(0)
+                attn = attn.masked_fill(k_pos > q_pos, float("-inf"))
             attn = F.softmax(attn, dim=-1)
             attn = self.dropout(attn)
             out = torch.matmul(attn, v)
@@ -106,9 +122,12 @@ class WindowedAttention(nn.Module):
         Lk = k.shape[2]
         W = self.window_size
         G = min(self.num_global, Lk)
+        device = q.device
 
-        # Global anchor keys: first G key positions, visible to every query.
+        # Global anchor keys: first G key positions, visible to every query
+        # (subject to the causal mask below, when enabled).
         k_global, v_global = k[:, :, :G, :], v[:, :, :G, :]
+        global_pos = torch.arange(G, device=device)
 
         outputs = []
         chunk = max(W, 1)
@@ -120,16 +139,23 @@ class WindowedAttention(nn.Module):
 
             # Local window in absolute-position space; starts after the
             # global region so a key is never double-counted in softmax.
+            # Causal: never look past the query's own position (no lookahead).
             lo = max(G, abs_start - W)
-            hi = min(Lk, abs_end + W + 1)
+            hi = min(Lk, abs_end + 1) if self.causal else min(Lk, abs_end + W + 1)
             if lo < hi:
                 k_local, v_local = k[:, :, lo:hi, :], v[:, :, lo:hi, :]
+                local_pos = torch.arange(lo, hi, device=device)
                 k_cat = torch.cat([k_global, k_local], dim=2)
                 v_cat = torch.cat([v_global, v_local], dim=2)
+                key_pos = torch.cat([global_pos, local_pos], dim=0)
             else:
                 k_cat, v_cat = k_global, v_global
+                key_pos = global_pos
 
             attn = torch.matmul(q_chunk, k_cat.transpose(-2, -1)) * self.scale
+            if self.causal:
+                q_pos = torch.arange(abs_start, abs_end + 1, device=device).unsqueeze(1)
+                attn = attn.masked_fill(key_pos.unsqueeze(0) > q_pos, float("-inf"))
             attn = F.softmax(attn, dim=-1)
             attn = self.dropout(attn)
             outputs.append(torch.matmul(attn, v_cat))

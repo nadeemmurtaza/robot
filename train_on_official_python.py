@@ -131,11 +131,13 @@ def main(
     # Checkpoint names are tier-suffixed: a small-tier vqvae/generator has
     # different shapes than the 2B/1M-context one, so sharing one filename
     # across tiers would load mismatched weights (or crash on shape mismatch).
+    # NOTE: no fallback to the unsuffixed (small-tier) checkpoint for other
+    # tiers - different tensor shapes, would crash load_state_dict instead of
+    # just training fresh for the new tier (see online_learner.py for the
+    # same fix and why).
     tier_suffix = "" if tier == "small" else f"_{tier}"
     vqvae_ckpt = f"checkpoints/vqvae_pos{tier_suffix}.pt"
     gen_ckpt = f"checkpoints/generator_base{tier_suffix}.pt"
-    if tier_suffix and not os.path.exists(vqvae_ckpt) and os.path.exists("checkpoints/vqvae_pos.pt"):
-        vqvae_ckpt = "checkpoints/vqvae_pos.pt"  # legacy default for backward compat
 
     # Load VQ-VAE
     if not os.path.exists(vqvae_ckpt):
