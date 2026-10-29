@@ -14,14 +14,34 @@ from custom_ncm.dataset import get_dataloaders
 from custom_ncm.vqvae import CodeVQVAE
 
 def get_device() -> torch.device:
-    """cuda > TPU (via torch_xla, if installed) > cpu."""
+    """
+    cuda > TPU (via torch_xla, if installed) > cpu.
+    torch_xla.core.xla_model.xla_device() was deprecated starting with
+    torch_xla 2.8 in favor of the top-level torch_xla.device() - try that
+    first, fall back to the legacy API for older installs, and catch more
+    than just ImportError since a real TPU runtime can fail here with other
+    exception types (e.g. a PJRT init error) that shouldn't silently and
+    invisibly downgrade an intended TPU run to CPU.
+    """
     if torch.cuda.is_available():
         return torch.device("cuda")
+    errors = []
+    try:
+        import torch_xla
+        return torch_xla.device()
+    except Exception as e:
+        errors.append(f"torch_xla.device(): {e}")
     try:
         import torch_xla.core.xla_model as xm
         return xm.xla_device()
-    except ImportError:
-        return torch.device("cpu")
+    except Exception as e:
+        errors.append(f"torch_xla.core.xla_model.xla_device(): {e}")
+    if errors:
+        print(
+            "  [!] torch_xla import/device calls both failed, falling back to CPU:\n    "
+            + "\n    ".join(errors)
+        )
+    return torch.device("cpu")
 
 def _warn_if_hardware_insufficient(config: NCMConfig, device: torch.device):
     is_tpu = "xla" in str(device)
