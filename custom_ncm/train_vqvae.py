@@ -13,10 +13,31 @@ from custom_ncm.code_tokenizer import ByteCodeTokenizer
 from custom_ncm.dataset import get_dataloaders
 from custom_ncm.vqvae import CodeVQVAE
 
+def get_device() -> torch.device:
+    """cuda > TPU (via torch_xla, if installed) > cpu."""
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    try:
+        import torch_xla.core.xla_model as xm
+        return xm.xla_device()
+    except ImportError:
+        return torch.device("cpu")
+
+def _warn_if_hardware_insufficient(config: NCMConfig, device: torch.device):
+    is_tpu = "xla" in str(device)
+    if config.context_length > 100_000 and device.type != "cuda" and not is_tpu:
+        print(
+            f"  [!] WARNING: context_length={config.context_length:,} on device '{device}' "
+            "(no GPU/TPU detected). This tier was sized for a TPU v5e-1 / A100-class "
+            "accelerator with tens of GB of RAM - it will likely exhaust memory or run "
+            "for an unreasonable amount of time on CPU."
+        )
+
 def train_vqvae(config: NCMConfig, epochs: int = 15, checkpoint_path: str = "checkpoints/vqvae.pt"):
     os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = get_device()
     print(f"[*] Training VQ-VAE on device: {device}")
+    _warn_if_hardware_insufficient(config, device)
     
     tokenizer = ByteCodeTokenizer()
     train_loader, val_loader = get_dataloaders(
@@ -35,7 +56,9 @@ def train_vqvae(config: NCMConfig, epochs: int = 15, checkpoint_path: str = "che
         n_enc_layers=config.vq_enc_layers,
         n_dec_layers=config.vq_dec_layers,
         commitment_cost=config.commitment_cost,
-        dropout=0.1
+        dropout=0.1,
+        attn_window=config.attn_window,
+        attn_num_global=config.attn_num_global
     ).to(device)
     
     optimizer = AdamW(model.parameters(), lr=config.lr_vqvae, weight_decay=config.weight_decay)
@@ -106,4 +129,11 @@ def train_vqvae(config: NCMConfig, epochs: int = 15, checkpoint_path: str = "che
     return model
 
 if __name__ == "__main__":
-    train_vqvae(NCMConfig(), epochs=10)
+    import argparse
+    from custom_ncm.config import add_tier_cli_arg
+    parser = argparse.ArgumentParser(description="Train the Stage-1 VQ-VAE concept tokenizer")
+    add_tier_cli_arg(parser)
+    parser.add_argument("--epochs", type=int, default=10)
+    parser.add_argument("--checkpoint", type=str, default="checkpoints/vqvae.pt")
+    args = parser.parse_args()
+    train_vqvae(NCMConfig.from_tier(args.tier), epochs=args.epochs, checkpoint_path=args.checkpoint)

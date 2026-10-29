@@ -13,6 +13,7 @@ from custom_ncm.vqvae import CodeVQVAE
 from custom_ncm.ncm_model import NextConceptGenerator
 from custom_ncm.generate import generate_code_coarse_to_fine
 from custom_ncm.hybrid_model import HybridConsistencyNCM
+from custom_ncm.attention import convert_legacy_mha_state_dict
 
 def get_param_count(model: torch.nn.Module) -> int:
     return sum(p.numel() for p in model.parameters())
@@ -137,12 +138,12 @@ def main():
                 n_enc_layers=cfg.vq_enc_layers,
                 n_dec_layers=cfg.vq_dec_layers
             ).to(device)
-            vqvae.load_state_dict(v_data["model"])
+            vqvae.load_state_dict(convert_legacy_mha_state_dict(v_data["model"]))
             vqvae.eval()
-            
+
             hybrid_model = HybridConsistencyNCM(cfg, vqvae=vqvae).to(device)
             h_data = torch.load(h_ckpt, map_location=device, weights_only=False)
-            hybrid_model.load_state_dict(h_data["model"], strict=False)
+            hybrid_model.load_state_dict(convert_legacy_mha_state_dict(h_data["model"]), strict=False)
             hybrid_model.eval()
             
         prompt = args.prompt or "# Return the square of x\ndef square(x):\n"
@@ -177,9 +178,9 @@ def main():
             n_enc_layers=cfg.vq_enc_layers,
             n_dec_layers=cfg.vq_dec_layers
         ).to(device)
-        vqvae.load_state_dict(v_data["model"])
+        vqvae.load_state_dict(convert_legacy_mha_state_dict(v_data["model"]))
         vqvae.eval()
-        
+
         generator = NextConceptGenerator(
             vqvae=vqvae,
             prefix_len=cfg.prefix_length,
@@ -189,7 +190,7 @@ def main():
             codebook_size=cfg.vq_codebook_size
         ).to(device)
         g_data = torch.load(ckpt_path, map_location=device, weights_only=False)
-        generator.load_state_dict(g_data["model"])
+        generator.load_state_dict(convert_legacy_mha_state_dict(g_data["model"]))
         generator.eval()
         
         prompt = args.prompt or "# Return the square of x\ndef square(x):\n"

@@ -20,6 +20,7 @@ from custom_ncm.ncm_model import NextConceptGenerator
 from custom_ncm.hybrid_model import HybridConsistencyNCM
 from custom_ncm.train_hybrid import train_hybrid_model
 from custom_ncm.verifier import CodeVerifier
+from custom_ncm.attention import convert_legacy_mha_state_dict
 
 def print_banner():
     print("=" * 75)
@@ -107,12 +108,12 @@ def main():
             n_enc_layers=config.vq_enc_layers,
             n_dec_layers=config.vq_dec_layers
         ).to(device)
-        vqvae.load_state_dict(v_data["model"])
+        vqvae.load_state_dict(convert_legacy_mha_state_dict(v_data["model"]))
         vqvae.eval()
         
         hybrid_model = HybridConsistencyNCM(config=config, vqvae=vqvae).to(device)
         h_data = torch.load(ckpt_path, map_location=device, weights_only=False)
-        hybrid_model.load_state_dict(h_data["model"], strict=False)
+        hybrid_model.load_state_dict(convert_legacy_mha_state_dict(h_data["model"]), strict=False)
         hybrid_model.eval()
         print("[+] Hybrid Model loaded successfully!")
         

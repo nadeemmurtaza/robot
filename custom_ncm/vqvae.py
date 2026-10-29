@@ -8,11 +8,20 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from custom_ncm.attention import WindowedAttention
+
 class TransformerBlock(nn.Module):
-    def __init__(self, d_model: int, n_head: int = 4, dropout: float = 0.1):
+    def __init__(self, d_model: int, n_head: int = 4, dropout: float = 0.1,
+                 window_size: int = 2048, num_global: int = 128):
         super().__init__()
         self.ln1 = nn.LayerNorm(d_model)
-        self.attn = nn.MultiheadAttention(d_model, n_head, dropout=dropout, batch_first=True)
+        # WindowedAttention falls back to exact dense self-attention for the
+        # short sequences used at the small/medium/large tiers; it only
+        # switches to local-window + global-token attention when the sequence
+        # is long enough that dense attention would be infeasible (the 1M
+        # context tier) - see custom_ncm/attention.py.
+        self.attn = WindowedAttention(d_model, n_head, window_size=window_size,
+                                       num_global=num_global, dropout=dropout)
         self.ln2 = nn.LayerNorm(d_model)
         self.mlp = nn.Sequential(
             nn.Linear(d_model, 4 * d_model),
@@ -22,9 +31,9 @@ class TransformerBlock(nn.Module):
             nn.Dropout(dropout)
         )
 
-    def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         normed = self.ln1(x)
-        attn_out, _ = self.attn(normed, normed, normed, attn_mask=attn_mask)
+        attn_out = self.attn(normed, normed, normed, q_start=0)
         x = x + attn_out
         x = x + self.mlp(self.ln2(x))
         return x
@@ -179,7 +188,9 @@ class CodeVQVAE(nn.Module):
         n_enc_layers: int = 2,
         n_dec_layers: int = 2,
         commitment_cost: float = 0.25,
-        dropout: float = 0.1
+        dropout: float = 0.1,
+        attn_window: int = 2048,
+        attn_num_global: int = 128
     ):
         super().__init__()
         self.vocab_size = vocab_size
@@ -187,7 +198,7 @@ class CodeVQVAE(nn.Module):
         self.embed_dim = embed_dim
         self.levels = levels
         self.use_rope = context_length > 8192
-        
+
         # Token and positional embeddings
         self.token_emb = nn.Embedding(vocab_size, embed_dim)
         if self.use_rope:
@@ -198,20 +209,22 @@ class CodeVQVAE(nn.Module):
             self.pos_emb = nn.Embedding(context_length, embed_dim)
             self.dec_pos_emb = nn.Embedding(context_length, embed_dim)
             self.rope = None
-        
+
         # Transformer Encoder
         self.enc_blocks = nn.ModuleList([
-            TransformerBlock(embed_dim, n_head=4, dropout=dropout)
+            TransformerBlock(embed_dim, n_head=4, dropout=dropout,
+                              window_size=attn_window, num_global=attn_num_global)
             for _ in range(n_enc_layers)
         ])
         self.enc_ln = nn.LayerNorm(embed_dim)
-        
+
         # Multiscale Residual Quantizer
         self.vq = MultiscaleResidualVQ(levels, embed_dim, codebook_size, commitment_cost)
-        
+
         # Transformer Decoder
         self.dec_blocks = nn.ModuleList([
-            TransformerBlock(embed_dim, n_head=4, dropout=dropout)
+            TransformerBlock(embed_dim, n_head=4, dropout=dropout,
+                              window_size=attn_window, num_global=attn_num_global)
             for _ in range(n_dec_layers)
         ])
         self.dec_ln = nn.LayerNorm(embed_dim)

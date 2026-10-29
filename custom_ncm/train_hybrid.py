@@ -22,6 +22,7 @@ from custom_ncm.vqvae import CodeVQVAE
 from custom_ncm.ncm_model import NextConceptGenerator
 from custom_ncm.hybrid_model import HybridConsistencyNCM
 from custom_ncm.official_python_harvester import OfficialPythonHarvester
+from custom_ncm.attention import convert_legacy_mha_state_dict
 
 def train_hybrid_model(
     config: Optional[NCMConfig] = None,
@@ -59,7 +60,7 @@ def train_hybrid_model(
             n_enc_layers=config.vq_enc_layers,
             n_dec_layers=config.vq_dec_layers
         ).to(device)
-        vqvae.load_state_dict(v_data["model"])
+        vqvae.load_state_dict(convert_legacy_mha_state_dict(v_data["model"]))
         print(f"[+] Loaded VQ-VAE Concept Tokenizer from: {vqvae_ckpt}")
         
     vqvae.eval()
@@ -84,7 +85,7 @@ def train_hybrid_model(
     
     if os.path.exists(gen_ckpt):
         g_data = torch.load(gen_ckpt, map_location=device, weights_only=False)
-        ncm_gen.load_state_dict(g_data["model"], strict=False)
+        ncm_gen.load_state_dict(convert_legacy_mha_state_dict(g_data["model"]), strict=False)
         print(f"[+] Loaded NCM Generator baseline weights from: {gen_ckpt}")
         
     # 3. Initialize Hybrid Model

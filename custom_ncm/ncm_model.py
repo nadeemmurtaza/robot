@@ -11,12 +11,26 @@ import torch.nn.functional as F
 
 from custom_ncm.vqvae import CodeVQVAE
 from custom_ncm.rope import RotaryPositionalEmbedding
+from custom_ncm.attention import WindowedAttention
 
 class NCMTransformerBlock(nn.Module):
-    def __init__(self, d_model: int, n_head: int = 4, dropout: float = 0.1):
+    """
+    Block-causal transformer block: the full sequence is [Prefix, Level0, ...,
+    LevelK-1] and position i may only attend to key positions [0, boundary(i))
+    where boundary(i) is the end of i's own segment (prefix sees only prefix;
+    level l sees prefix + levels <= l). Rather than materialize one dense
+    [SeqLen, SeqLen] mask (infeasible once SeqLen reaches the 1M-token tier -
+    see custom_ncm/attention.py), this runs one WindowedAttention call per
+    segment, each querying a growing key-prefix of the layer's input. That is
+    exactly equivalent to the dense masked version, just without the O(L^2)
+    memory blowup.
+    """
+    def __init__(self, d_model: int, n_head: int = 4, dropout: float = 0.1,
+                 window_size: int = 2048, num_global: int = 128):
         super().__init__()
         self.ln1 = nn.LayerNorm(d_model)
-        self.attn = nn.MultiheadAttention(d_model, n_head, dropout=dropout, batch_first=True)
+        self.attn = WindowedAttention(d_model, n_head, window_size=window_size,
+                                       num_global=num_global, dropout=dropout)
         self.ln2 = nn.LayerNorm(d_model)
         self.mlp = nn.Sequential(
             nn.Linear(d_model, 4 * d_model),
@@ -26,10 +40,15 @@ class NCMTransformerBlock(nn.Module):
             nn.Dropout(dropout)
         )
 
-    def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, boundaries: List[int]) -> torch.Tensor:
+        """boundaries: cumulative offsets, e.g. [0, P, P+levels[0], ..., total_len]."""
         normed = self.ln1(x)
-        # attn_mask has shape [SeqLen, SeqLen] with -inf for forbidden positions
-        attn_out, _ = self.attn(normed, normed, normed, attn_mask=attn_mask)
+        segments = []
+        for start, end in zip(boundaries[:-1], boundaries[1:]):
+            q_seg = normed[:, start:end, :]
+            k_seg = normed[:, :end, :]
+            segments.append(self.attn(q_seg, k_seg, k_seg, q_start=start))
+        attn_out = torch.cat(segments, dim=1)
         x = x + attn_out
         x = x + self.mlp(self.ln2(x))
         return x
@@ -48,7 +67,9 @@ class NextConceptGenerator(nn.Module):
         n_head: int = 4,
         n_layer: int = 4,
         dropout: float = 0.1,
-        codebook_size: int = 256
+        codebook_size: int = 256,
+        attn_window: int = 2048,
+        attn_num_global: int = 128
     ):
         super().__init__()
         self.vqvae = vqvae
@@ -89,7 +110,8 @@ class NextConceptGenerator(nn.Module):
             
         # Transformer backbone
         self.blocks = nn.ModuleList([
-            NCMTransformerBlock(d_model, n_head=n_head, dropout=dropout)
+            NCMTransformerBlock(d_model, n_head=n_head, dropout=dropout,
+                                window_size=attn_window, num_global=attn_num_global)
             for _ in range(n_layer)
         ])
         self.ln_f = nn.LayerNorm(d_model)
@@ -112,34 +134,18 @@ class NextConceptGenerator(nn.Module):
         pos = torch.arange(L, device=x.device).unsqueeze(0)
         return self.level_pos_emb(pos)
 
-    def build_block_causal_mask(self, P: int, levels: List[int], device: torch.device) -> torch.Tensor:
+    def build_boundaries(self, P: int, levels: List[int]) -> List[int]:
         """
-        Constructs the hierarchical attention mask:
-        - Prefix can attend to Prefix
-        - Level l can attend to Prefix and previous levels (< l)
-        - Within Level l, attention is FULLY BIDIRECTIONAL (all positions in parallel)
-        - Level l CANNOT attend to future levels (> l)
+        Cumulative segment offsets for the block-causal layout
+        [Prefix, Level0, ..., LevelK-1]: [0, P, P+levels[0], ..., total_len].
+        Segment i (boundaries[i]:boundaries[i+1]) may attend to key positions
+        [0, boundaries[i+1]) - itself and everything before it - matching the
+        original dense mask's semantics without materializing it.
         """
-        total_len = P + sum(levels)
-        mask = torch.full((total_len, total_len), float('-inf'), device=device)
-        
-        # Prefix self-attention
-        mask[:P, :P] = 0.0
-        
-        # Block layout
-        start_q = P
-        for l_idx, l_len in enumerate(levels):
-            end_q = start_q + l_len
-            
-            # Can attend to Prefix
-            mask[start_q:end_q, :P] = 0.0
-            
-            # Can attend to all previous levels and current level
-            mask[start_q:end_q, P:end_q] = 0.0
-            
-            start_q = end_q
-            
-        return mask
+        boundaries = [0, P]
+        for l_len in levels:
+            boundaries.append(boundaries[-1] + l_len)
+        return boundaries
 
     def forward(
         self,
@@ -184,14 +190,15 @@ class NextConceptGenerator(nn.Module):
             
         # Concatenate full sequence: [Prefix, Level 0, Level 1, ..., Level K-1]
         full_seq = torch.cat([h_prefix] + level_inputs, dim=1)
-        
-        # Build block-causal attention mask
-        attn_mask = self.build_block_causal_mask(self.prefix_len, self.levels, device)
-        
+
+        # Block-causal segment boundaries (replaces a dense [L,L] mask - see
+        # build_boundaries / NCMTransformerBlock docstring)
+        boundaries = self.build_boundaries(self.prefix_len, self.levels)
+
         # Transformer forward
         h = full_seq
         for block in self.blocks:
-            h = block(h, attn_mask=attn_mask)
+            h = block(h, boundaries)
         h = self.ln_f(h)
         
         # Compute loss and collect per-level logits
@@ -249,17 +256,13 @@ class NextConceptGenerator(nn.Module):
                 l_in = self.input_proj(z_down) + self.level_emb(torch.tensor(l, device=device)) + self.get_level_pos(z_down, level_len)
                 
             # Concatenate prefix + current level input
-            # Attention allows bidirectional attention within current level and cross-attention to prefix
+            # Prefix attends only to prefix; current level attends to prefix + itself.
             seq = torch.cat([h_prefix, l_in], dim=1)
-            
-            # Mask: prefix attends to prefix; current level attends to prefix + current level
-            seq_len = P + level_len
-            gen_mask = torch.zeros((seq_len, seq_len), device=device)
-            gen_mask[:P, P:] = float('-inf')
-            
+            boundaries = [0, P, P + level_len]
+
             h = seq
             for block in self.blocks:
-                h = block(h, attn_mask=gen_mask)
+                h = block(h, boundaries)
             h = self.ln_f(h)
             
             # Extract current level hidden states and project with level head

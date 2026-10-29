@@ -16,6 +16,7 @@ from custom_ncm.vqvae import CodeVQVAE
 from custom_ncm.ncm_model import NextConceptGenerator
 from custom_ncm.verifier import CodeVerifier, VerificationResult
 from custom_ncm.curriculum import Lesson, get_curriculum, get_chapters
+from custom_ncm.attention import convert_legacy_mha_state_dict
 
 class PythonTeacher:
     """
@@ -52,7 +53,7 @@ class PythonTeacher:
             n_enc_layers=self.config.vq_enc_layers,
             n_dec_layers=self.config.vq_dec_layers
         ).to(device)
-        self.vqvae.load_state_dict(v_data["model"])
+        self.vqvae.load_state_dict(convert_legacy_mha_state_dict(v_data["model"]))
         self.vqvae.eval()
         for p in self.vqvae.parameters():
             p.requires_grad = False
@@ -67,7 +68,7 @@ class PythonTeacher:
             n_layer=self.config.gen_n_layer,
             codebook_size=self.config.vq_codebook_size
         ).to(device)
-        self.generator.load_state_dict(g_data["model"])
+        self.generator.load_state_dict(convert_legacy_mha_state_dict(g_data["model"]))
         
         self.optimizer = AdamW(
             self.generator.parameters(),

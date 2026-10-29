@@ -10,6 +10,7 @@ from custom_ncm.config import NCMConfig
 from custom_ncm.code_tokenizer import ByteCodeTokenizer
 from custom_ncm.vqvae import CodeVQVAE
 from custom_ncm.ncm_model import NextConceptGenerator
+from custom_ncm.attention import convert_legacy_mha_state_dict
 
 def load_ncm_model(
     vqvae_ckpt: str = "checkpoints/vqvae.pt",
@@ -32,9 +33,9 @@ def load_ncm_model(
         n_enc_layers=config.vq_enc_layers,
         n_dec_layers=config.vq_dec_layers
     ).to(device)
-    vqvae.load_state_dict(v_data["model"])
+    vqvae.load_state_dict(convert_legacy_mha_state_dict(v_data["model"]))
     vqvae.eval()
-    
+
     g_data = torch.load(gen_ckpt, map_location=device, weights_only=False)
     g_config = g_data.get("config", config)
     # Detect number of layers from checkpoint
@@ -47,7 +48,7 @@ def load_ncm_model(
         n_layer=n_layers,
         codebook_size=g_config.vq_codebook_size
     ).to(device)
-    generator.load_state_dict(g_data["model"])
+    generator.load_state_dict(convert_legacy_mha_state_dict(g_data["model"]))
     generator.eval()
     
     return generator, tokenizer, config

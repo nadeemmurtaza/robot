@@ -51,6 +51,15 @@ class NCMConfig:
     top_k: int = 40
     top_p: float = 0.9
 
+    # Attention settings - dense attention needs O(L^2) memory, which is only
+    # feasible while sequences stay small (small/medium/large tiers below all
+    # fall back to exact dense attention automatically, see
+    # custom_ncm/attention.py). attn_window/attn_num_global only start to
+    # matter once a sequence is long enough that dense attention would OOM
+    # (the 1M-token tier).
+    attn_window: int = 2048        # local attention window (keys each side)
+    attn_num_global: int = 128     # always-visible global anchor tokens
+
     @classmethod
     def small(cls) -> "NCMConfig":
         """Small tier (~2.9M params) - Default lightweight baseline."""
@@ -125,10 +134,47 @@ class NCMConfig:
             gen_n_head=16,
             batch_size=1,
             lr_vqvae=1e-4,
-            lr_gen=5e-5
+            lr_gen=5e-5,
+            # Dense attention is O(L^2) - at this tier's level widths that is
+            # infeasible on any accelerator (see custom_ncm/attention.py).
+            # window=4096 keeps each WindowedAttention call's score matrix a
+            # manageable [Lq_chunk, ~8192+global] instead of [L, L].
+            attn_window=4096,
+            attn_num_global=256
         )
 
     @classmethod
     def two_billion(cls) -> "NCMConfig":
         """Alias for the Frontier 2.04B parameter tier with 1M context."""
         return cls.two_billion_1m()
+
+    @classmethod
+    def from_tier(cls, name: str) -> "NCMConfig":
+        tiers = {
+            "small": cls.small,
+            "medium": cls.medium,
+            "large": cls.large,
+            "two_billion_1m": cls.two_billion_1m,
+            "two_billion": cls.two_billion,
+        }
+        if name not in tiers:
+            raise ValueError(f"Unknown tier '{name}'. Choices: {list(tiers.keys())}")
+        return tiers[name]()
+
+
+def add_tier_cli_arg(parser, default: str = "small"):
+    """
+    Shared --tier flag for train_vqvae.py / train_ncm.py / train_on_official_python.py.
+    Defaults to 'small' so a bare run on a local CPU machine stays safe; the
+    2.04B-param / 1M-context tier is available via --tier two_billion_1m but is
+    only realistic on a TPU/A100-class accelerator (see NCMConfig.two_billion_1m
+    docstring and custom_ncm/attention.py for why dense attention alone can't
+    do it).
+    """
+    parser.add_argument(
+        "--tier", type=str, default=default,
+        choices=["small", "medium", "large", "two_billion_1m"],
+        help="Model size tier (default: %(default)s). 'two_billion_1m' needs a "
+             "TPU/A100-class accelerator with tens of GB RAM - see README."
+    )
+    return parser

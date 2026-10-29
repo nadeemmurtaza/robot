@@ -13,6 +13,8 @@ from custom_ncm.code_tokenizer import ByteCodeTokenizer
 from custom_ncm.dataset import get_dataloaders
 from custom_ncm.vqvae import CodeVQVAE
 from custom_ncm.ncm_model import NextConceptGenerator
+from custom_ncm.train_vqvae import get_device, _warn_if_hardware_insufficient
+from custom_ncm.attention import convert_legacy_mha_state_dict
 
 def train_ncm(
     config: NCMConfig,
@@ -22,8 +24,9 @@ def train_ncm(
     epochs: int = 20
 ):
     os.makedirs(os.path.dirname(gen_checkpoint), exist_ok=True)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = get_device()
     print(f"[*] Training NCM Generator on device: {device}")
+    _warn_if_hardware_insufficient(config, device)
     
     tokenizer = ByteCodeTokenizer()
     train_loader, val_loader = get_dataloaders(
@@ -45,14 +48,16 @@ def train_ncm(
             levels=config.levels,
             codebook_size=config.vq_codebook_size,
             n_enc_layers=config.vq_enc_layers,
-            n_dec_layers=config.vq_dec_layers
+            n_dec_layers=config.vq_dec_layers,
+            attn_window=config.attn_window,
+            attn_num_global=config.attn_num_global
         ).to(device)
-        vqvae.load_state_dict(ckpt["model"])
-        
+        vqvae.load_state_dict(convert_legacy_mha_state_dict(ckpt["model"]))
+
     vqvae.eval()
     for p in vqvae.parameters():
         p.requires_grad = False
-        
+
     # 2. Initialize NextConceptGenerator
     generator = NextConceptGenerator(
         vqvae=vqvae,
@@ -61,7 +66,9 @@ def train_ncm(
         n_head=config.gen_n_head,
         n_layer=config.gen_n_layer,
         dropout=config.gen_dropout,
-        codebook_size=config.vq_codebook_size
+        codebook_size=config.vq_codebook_size,
+        attn_window=config.attn_window,
+        attn_num_global=config.attn_num_global
     ).to(device)
     
     optimizer = AdamW(generator.parameters(), lr=config.lr_gen, weight_decay=config.weight_decay)
@@ -111,4 +118,15 @@ def train_ncm(
     return generator
 
 if __name__ == "__main__":
-    train_ncm(NCMConfig(), epochs=15)
+    import argparse
+    from custom_ncm.config import add_tier_cli_arg
+    parser = argparse.ArgumentParser(description="Train the Stage-2 Next-Concept generator")
+    add_tier_cli_arg(parser)
+    parser.add_argument("--epochs", type=int, default=15)
+    parser.add_argument("--vqvae-checkpoint", type=str, default="checkpoints/vqvae.pt")
+    parser.add_argument("--gen-checkpoint", type=str, default="checkpoints/generator.pt")
+    args = parser.parse_args()
+    train_ncm(
+        NCMConfig.from_tier(args.tier), epochs=args.epochs,
+        vqvae_checkpoint=args.vqvae_checkpoint, gen_checkpoint=args.gen_checkpoint
+    )

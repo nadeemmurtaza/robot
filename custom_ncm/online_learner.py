@@ -4,15 +4,18 @@ Allows Code Robot to ingest code snippets and documentation directly into its ne
 as it browses and reads web pages.
 """
 import os
+import json
+import random
 import torch
 from torch.optim import AdamW
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 
 from custom_ncm.config import NCMConfig
 from custom_ncm.code_tokenizer import ByteCodeTokenizer
 from custom_ncm.vqvae import CodeVQVAE
 from custom_ncm.ncm_model import NextConceptGenerator
 from custom_ncm.dataset import CodeDataset
+from custom_ncm.attention import convert_legacy_mha_state_dict
 from torch.utils.data import DataLoader
 
 class OnlineCodeLearner:
@@ -25,7 +28,10 @@ class OnlineCodeLearner:
         self,
         checkpoint_out: str = "checkpoints/live_trained_robot.pt",
         device: Optional[torch.device] = None,
-        lr: float = 1e-4
+        lr: float = 1e-4,
+        replay_path: str = "checkpoints/replay_buffer.jsonl",
+        replay_max_size: int = 2000,
+        replay_sample_size: int = 8
     ):
         self.checkpoint_out = checkpoint_out
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -34,6 +40,17 @@ class OnlineCodeLearner:
         self.lr = lr
 
         os.makedirs(os.path.dirname(self.checkpoint_out), exist_ok=True)
+
+        # Replay buffer: each live training step on a new page is also mixed
+        # with a random sample of PAST pages' (prompt, code) pairs, loaded
+        # from/persisted to disk. Without this, repeated single-page gradient
+        # updates with no held-out data drift the weights toward whatever was
+        # browsed most recently and forget earlier pages (catastrophic
+        # forgetting) - this is the standard experience-replay mitigation.
+        self.replay_path = replay_path
+        self.replay_max_size = replay_max_size
+        self.replay_sample_size = replay_sample_size
+        self.replay_buffer: List[Tuple[str, str]] = self._load_replay_buffer()
 
         # 1. Load VQ-VAE Concept Tokenizer
         vqvae_path = "checkpoints/vqvae_pos.pt" if os.path.exists("checkpoints/vqvae_pos.pt") else "checkpoints/vqvae.pt"
@@ -49,7 +66,7 @@ class OnlineCodeLearner:
 
         if os.path.exists(vqvae_path):
             v_data = torch.load(vqvae_path, map_location=self.device, weights_only=False)
-            self.vqvae.load_state_dict(v_data["model"])
+            self.vqvae.load_state_dict(convert_legacy_mha_state_dict(v_data["model"]))
         else:
             print(
                 f"  [!] WARNING: no VQ-VAE checkpoint found at '{vqvae_path}'. "
@@ -78,7 +95,7 @@ class OnlineCodeLearner:
         )
         if os.path.exists(base_ckpt):
             g_data = torch.load(base_ckpt, map_location=self.device, weights_only=False)
-            self.generator.load_state_dict(g_data["model"], strict=False)
+            self.generator.load_state_dict(convert_legacy_mha_state_dict(g_data["model"]), strict=False)
         else:
             print(
                 f"  [!] WARNING: no generator checkpoint found (looked for '{self.checkpoint_out}', "
@@ -88,6 +105,30 @@ class OnlineCodeLearner:
 
         self.generator.train()
         self.optimizer = AdamW(self.generator.parameters(), lr=self.lr, weight_decay=0.01)
+
+    def _load_replay_buffer(self) -> List[Tuple[str, str]]:
+        if not os.path.exists(self.replay_path):
+            return []
+        buffer = []
+        with open(self.replay_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    item = json.loads(line)
+                    buffer.append((item["prompt"], item["target"]))
+        # Keep only the most recent replay_max_size on load too, in case the
+        # file was grown by an older run with a larger cap.
+        return buffer[-self.replay_max_size:]
+
+    def _add_to_replay_buffer(self, pairs: List[Tuple[str, str]]) -> None:
+        if not pairs:
+            return
+        self.replay_buffer.extend(pairs)
+        if len(self.replay_buffer) > self.replay_max_size:
+            self.replay_buffer = self.replay_buffer[-self.replay_max_size:]
+        with open(self.replay_path, "w", encoding="utf-8") as f:
+            for prompt, target in self.replay_buffer:
+                f.write(json.dumps({"prompt": prompt, "target": target}) + "\n")
 
     def train_on_page(self, title: str, code_blocks: List[Dict[str, str]], text_paragraphs: List[str]) -> Dict[str, Any]:
         """
@@ -127,6 +168,16 @@ class OnlineCodeLearner:
         if not pairs:
             return {"loss": None, "trained_samples": 0}
 
+        new_pairs = list(pairs)
+
+        # Mix in a random sample of past pages' pairs so this gradient step
+        # doesn't only see the current page (replay buffer - see __init__).
+        replay_sample = []
+        if self.replay_buffer:
+            k = min(self.replay_sample_size, len(self.replay_buffer))
+            replay_sample = random.sample(self.replay_buffer, k)
+            pairs = pairs + replay_sample
+
         dataset = CodeDataset(
             pairs,
             self.tokenizer,
@@ -154,6 +205,9 @@ class OnlineCodeLearner:
 
         avg_loss = total_loss / max(steps, 1)
 
+        # Add this page's (non-replay) pairs to the buffer for future pages.
+        self._add_to_replay_buffer(new_pairs)
+
         # Save live weights
         torch.save({
             "model": self.generator.state_dict(),
@@ -164,5 +218,7 @@ class OnlineCodeLearner:
         return {
             "loss": avg_loss,
             "trained_samples": len(pairs),
+            "replay_samples_mixed_in": len(replay_sample),
+            "replay_buffer_size": len(self.replay_buffer),
             "checkpoint": self.checkpoint_out
         }
